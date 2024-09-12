@@ -1,0 +1,14 @@
+pad 0.0.0
+2024 CU InSpace
+
+DESCRIPTION:
+    Emulates the pad control box.
+
+USAGE:
+    pad [options]
+
+OPTIONS:
+    -p port     Specify the port number to use.
+
+EXAMPLES:
+    pad -p 1984

@@ -1,0 +1,11 @@
+telem_client 0.0.0
+(c) CU InSpace 2024
+
+DESCRIPTION:
+    Acts a client consuming telemetry data from the pad server.
+
+USAGE:
+    telem_client
+
+EXAMPLES:
+    telem_client
