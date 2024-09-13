@@ -116,7 +116,7 @@ void *telemetry_run(void *arg) {
     /* Open dummy data file */
 
     // TODO: remove abspath
-    FILE *data = fopen("/home/linguini/cuinspace/hysim/coldflow-fill.csv", "r");
+    FILE *data = fopen("../coldflow-fill.csv", "r");
     if (data == NULL) {
         fprintf(stderr, "Could not open dummy data: %s\n", strerror(errno));
         telemetry_disconnect_all(&telem);
