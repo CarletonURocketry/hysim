@@ -8,7 +8,8 @@ USAGE:
     pad [options]
 
 OPTIONS:
-    -p port     Specify the port number to use.
+    -t file     A CSV file containing sensor data telemetry to transmit. If not
+                specified, no sensor data telemetry will be sent.
 
 EXAMPLES:
-    pad -p 1984
+    pad -t ../thecoldhasflown.csv

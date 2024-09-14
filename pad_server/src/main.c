@@ -26,7 +26,7 @@ controller_args_t controller_args = {.port = CONTROL_PORT, .state = &state};
 
 telemetry_t telem;
 pthread_t telem_thread;
-telemetry_args_t telemetry_args = {.port = TELEMETRY_PORT, .state = &state};
+telemetry_args_t telemetry_args = {.port = TELEMETRY_PORT, .state = &state, .data_file = NULL};
 
 void int_handler(int sig) {
 
@@ -83,11 +83,14 @@ int main(int argc, char **argv) {
     /* Parse command line options. */
 
     int c;
-    while ((c = getopt(argc, argv, ":h")) != -1) {
+    while ((c = getopt(argc, argv, ":ht:")) != -1) {
         switch (c) {
         case 'h':
             puts(HELP_TEXT);
             exit(EXIT_SUCCESS);
+            break;
+        case 't':
+            telemetry_args.data_file = optarg;
             break;
         case '?':
             fprintf(stderr, "Unknown option -%c\n", optopt);

@@ -99,6 +99,7 @@ void *telemetry_run(void *arg) {
     padstate_t *state = ((telemetry_args_t *)(arg))->state;
     uint16_t port = ((telemetry_args_t *)(arg))->port;
     sem_t die = ((telemetry_args_t *)(arg))->die;
+    const char *data_file = ((telemetry_args_t *)(arg))->data_file;
 
     err = telemetry_init(&telem, port);
     if (err) {
@@ -116,7 +117,7 @@ void *telemetry_run(void *arg) {
     /* Open dummy data file */
 
     // TODO: remove abspath
-    FILE *data = fopen("/home/linguini/cuinspace/hysim/coldflow-fill.csv", "r");
+    FILE *data = fopen(data_file, "r");
     if (data == NULL) {
         fprintf(stderr, "Could not open dummy data: %s\n", strerror(errno));
         telemetry_disconnect_all(&telem);
@@ -149,7 +150,7 @@ void *telemetry_run(void *arg) {
 
         /* Time */
         char *timestr = strtok(buffer, ",");
-        uint32_t time = strtod(timestr, NULL) * 1000;
+        uint32_t time = strtoul(timestr, NULL, 10);
 
         /* Mass */
         char *massstr = strtok(NULL, ",");
