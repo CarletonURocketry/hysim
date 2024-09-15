@@ -66,6 +66,25 @@ static int telemetry_init(telemetry_sock_t *sock, uint16_t port) {
 }
 
 /*
+ * Closes a telemetry socket.
+ * @param arg A pointer to a telemetry socket.
+ * @return 0 on success, error code on error.
+ */
+static int telemetry_close(telemetry_sock_t *sock) {
+    if (close(sock->sock) < 0) {
+        return errno;
+    }
+    return 0;
+}
+
+/*
+ * pthread cleanup handler for telemetry socket.
+ * @param arg A pointer to a telemetry socket.
+ * @return 0 on success, error code on error.
+ */
+static void *telemetry_cleanup(void *arg) { thread_return(telemetry_close((telemetry_sock_t *)(arg))); }
+
+/*
  * Initializes a list of clients.
  * @param l The list to initialize.
  */
@@ -160,8 +179,16 @@ static void *telemetry_accept_thread(void *arg) {
 }
 
 /*
+ * Cleanup function to kill a thread.
+ * @param arg A pointer to the pthread_t thread handle.
+ */
+static void *thread_int(void *arg) {
+    pthread_kill(*(pthread_t *)(arg), SIGINT);
+    return 0;
+}
+
+/*
  * Run the thread responsible for transmitting telemetry data.
- * TODO: handle being killed
  * @param arg The arguments to the telemetry thread, of type `telemetry_args_t`.
  */
 void *telemetry_run(void *arg) {
@@ -180,6 +207,7 @@ void *telemetry_run(void *arg) {
         fprintf(stderr, "Could not start telemetry socket: %s\n", strerror(err));
         thread_return(err);
     }
+    pthread_cleanup_push(telemetry_cleanup, &telem);
 
     /* Create client list */
     client_l_t list;
@@ -193,12 +221,12 @@ void *telemetry_run(void *arg) {
         fprintf(stderr, "Could not create thread to accept new connections: %s\n", strerror(err));
         thread_return(err);
     }
+    pthread_cleanup_push(thread_int, &accept_thread);
 
     /* Open telemetry file */
     FILE *data = fopen(args->data_file, "r");
     if (data == NULL) {
         fprintf(stderr, "Could not open telemetry file \"%s\" with error: %s\n", args->data_file, strerror(errno));
-        pthread_kill(accept_thread, SIGINT);
         thread_return(err);
     }
 
@@ -208,7 +236,6 @@ void *telemetry_run(void *arg) {
         /* Handle file errors */
         if (ferror(data)) {
             fprintf(stderr, "Error reading telemetry file: %s\n", strerror(errno));
-            pthread_kill(accept_thread, SIGINT);
             thread_return(err);
         }
 
@@ -229,13 +256,12 @@ void *telemetry_run(void *arg) {
 
         // TODO: handle errors from mutex function calls
         // TODO: client list could have some API for sending to all?
-        // How to handle needing multiple synchronized sends? (one for header, one for packet)
+        // How to handle needing multiple synchronized sends behind monitor? (one for header, one for packet)
         err = pthread_mutex_lock(&list.lock); // Exclusive access to clients
 
         for (unsigned int i = 0; i < MAX_TELEMETRY; i++) {
             if (list.clients[i] == -1) continue; // Client is not connected
 
-            // TODO: handle errors here where client disconnects
             sent = send(list.clients[i], &hdr, sizeof(hdr), 0);
 
             if (sent == 0) {
@@ -267,5 +293,8 @@ void *telemetry_run(void *arg) {
         err = pthread_mutex_unlock(&list.lock); // Release access to client list
     }
 
-    return 0;
+    thread_return(0); // Normal return
+
+    pthread_cleanup_pop(1);
+    pthread_cleanup_pop(1);
 }

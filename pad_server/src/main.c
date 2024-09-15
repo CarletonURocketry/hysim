@@ -31,10 +31,10 @@ void int_handler(int sig) {
     (void)(sig);
     int err;
 
-    /* Tell threads to die */
+    /* Tell threads to die. TODO: handle err */
+    err = pthread_cancel(telem_thread);
 
     sem_post(&controller_args.die);
-    sem_post(&telemetry_args.die);
 
     printf("Terminating server...\n");
 
@@ -112,7 +112,6 @@ int main(int argc, char **argv) {
     }
 
     /* Start telemetry thread */
-    sem_init(&telemetry_args.die, 0, 0);
     err = pthread_create(&telem_thread, NULL, telemetry_run, &telemetry_args);
     if (err) {
         fprintf(stderr, "Could not start telemetry thread: %s\n", strerror(err));
