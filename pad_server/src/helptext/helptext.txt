@@ -2,14 +2,18 @@ pad 0.0.0
 2024 CU InSpace
 
 DESCRIPTION:
-    Emulates the pad control box.
+    Emulates the pad control box server.
 
 USAGE:
     pad [options]
 
 OPTIONS:
-    -t file     A CSV file containing sensor data telemetry to transmit. If not
+    -f file     A CSV file containing sensor data telemetry to transmit. If not
                 specified, no sensor data telemetry will be sent.
+    -t port     The port number to use for the telemetry connection. If not
+                specified, port 50002 is used.
+    -c port     The port number to use for the controller connection. If not
+                specified, port 50001 is used.
 
 EXAMPLES:
     pad -t ../thecoldhasflown.csv

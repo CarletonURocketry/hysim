@@ -104,12 +104,15 @@ static void client_list_init(client_l_t *l) {
  */
 static int client_list_add(client_l_t *l, int client) {
 
-    // TODO: do I need to handle return errors on pthread functions?
-    pthread_mutex_lock(&l->lock);
+    int err;
+
+    err = pthread_mutex_lock(&l->lock);
+    if (err) return err;
 
     /* No space, don't add client */
     while (l->connected == MAX_TELEMETRY) {
         pthread_cond_wait(&l->space_avail, &l->lock);
+        // TODO: do I need to handle return value
     }
 
     /* There is space, add the client */
@@ -117,8 +120,7 @@ static int client_list_add(client_l_t *l, int client) {
     for (unsigned int i = 0; i < MAX_TELEMETRY; i++) {
         if (l->clients[i] == -1) {
             l->clients[i] = client;
-            pthread_mutex_unlock(&l->lock);
-            return 0;
+            return pthread_mutex_unlock(&l->lock);
         }
     }
 
@@ -126,8 +128,7 @@ static int client_list_add(client_l_t *l, int client) {
      * any.
      */
     assert(0 && "Client list lied about space available.");
-    pthread_mutex_unlock(&l->lock);
-    return EAGAIN;
+    return pthread_mutex_unlock(&l->lock);
 }
 
 /*
@@ -137,15 +138,23 @@ static int client_list_add(client_l_t *l, int client) {
  */
 static int client_list_remove(client_l_t *l, int client_id) {
 
+    int ret;
+    int err;
+
     assert(0 <= client_id && client_id < MAX_TELEMETRY);
 
-    // TODO: handle pthread function errors?
-    pthread_mutex_lock(&l->lock);
-    close(l->clients[client_id]);
-    l->clients[client_id] = -1;
-    pthread_mutex_unlock(&l->lock);
+    err = pthread_mutex_lock(&l->lock);
+    if (err) return err;
 
-    return 0;
+    if (close(l->clients[client_id]) < 0) {
+        ret = errno;
+    }
+    l->clients[client_id] = -1;
+    ret = 0;
+
+    err = pthread_mutex_unlock(&l->lock);
+    if (err) return err;
+    return ret;
 }
 
 /*
@@ -260,7 +269,6 @@ void *telemetry_run(void *arg) {
         header_p hdr = {.type = TYPE_TELEM, .subtype = TELEM_PRESSURE};
         pressure_p pkt = {.id = 0, .time = time, .pressure = pressure};
 
-        // TODO: handle errors from mutex function calls
         // TODO: client list could have some API for sending to all?
         // How to handle needing multiple synchronized sends behind monitor? (one for header, one for packet)
         err = pthread_mutex_lock(&list.lock); // Exclusive access to clients

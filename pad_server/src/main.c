@@ -82,6 +82,12 @@ int main(int argc, char **argv) {
             exit(EXIT_SUCCESS);
             break;
         case 't':
+            telemetry_args.port = strtoul(optarg, NULL, 10);
+            break;
+        case 'c':
+            controller_args.port = strtoul(optarg, NULL, 10);
+            break;
+        case 'f':
             telemetry_args.data_file = optarg;
             break;
         case '?':
@@ -89,6 +95,12 @@ int main(int argc, char **argv) {
             exit(EXIT_FAILURE);
             break;
         }
+    }
+
+    if (telemetry_args.port == controller_args.port) {
+        fprintf(stderr, "Cannot use the same port number (%u) for both telemetry and control connections.\n",
+                telemetry_args.port);
+        exit(EXIT_FAILURE);
     }
 
     /* Set up the state to be shared */
