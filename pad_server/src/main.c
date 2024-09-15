@@ -75,7 +75,7 @@ int main(int argc, char **argv) {
     /* Parse command line options. */
 
     int c;
-    while ((c = getopt(argc, argv, ":ht:")) != -1) {
+    while ((c = getopt(argc, argv, ":ht:c:f:")) != -1) {
         switch (c) {
         case 'h':
             puts(HELP_TEXT);
