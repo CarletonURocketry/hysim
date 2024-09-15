@@ -1,7 +1,6 @@
 #include <getopt.h>
 #include <netinet/in.h>
 #include <pthread.h>
-#include <semaphore.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -99,7 +98,6 @@ int main(int argc, char **argv) {
     int err;
 
     /* Start controller thread */
-    sem_init(&controller_args.die, 0, 0);
     err = pthread_create(&controller_thread, NULL, controller_run, &controller_args);
     if (err) {
         fprintf(stderr, "Could not start controller thread: %s\n", strerror(err));
