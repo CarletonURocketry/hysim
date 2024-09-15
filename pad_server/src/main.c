@@ -20,11 +20,9 @@
 
 padstate_t state;
 
-controller_t controller;
 pthread_t controller_thread;
 controller_args_t controller_args = {.port = CONTROL_PORT, .state = &state};
 
-telemetry_t telem;
 pthread_t telem_thread;
 telemetry_args_t telemetry_args = {.port = TELEMETRY_PORT, .state = &state, .data_file = NULL};
 

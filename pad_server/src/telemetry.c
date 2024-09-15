@@ -1,205 +1,271 @@
+#include <assert.h>
 #include <errno.h>
 #include <pthread.h>
 #include <semaphore.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <time.h>
 #include <unistd.h>
 
 #include "telemetry.h"
 
-static char buffer[BUFSIZ];
+/* Helper function for returning an error code from a thread */
+#define thread_return(e) pthread_exit((void *)(unsigned long)((e)))
+
+/* Linked list of connected clients */
+typedef struct {
+    pthread_mutex_t lock;       /* Protect concurrent access to clients. */
+    pthread_cond_t space_avail; /* Space is available for a new client */
+    unsigned int connected;     /* The number of connected clients */
+    int clients[MAX_TELEMETRY]; /* A list of client connections */
+} client_l_t;
+
+/* Arguments for the connection accepting thread */
+struct accept_args {
+    client_l_t *list; /* The list of client connections */
+    int master_sock;  /* The master socket to accept connections on. */
+};
+
+/* The main telemetry socket */
+typedef struct {
+    int sock;
+    struct sockaddr_in addr;
+} telemetry_sock_t;
 
 /*
- * Initialize the telemetry structure for accepting connections.
+ * Set up the telemetry socket for connection.
+ * @param sock The telemetry socket to initialize.
+ * @param port The port number to use to accept connections.
+ * @return 0 for success, error code on failure.
  */
-int telemetry_init(telemetry_t *telem, uint16_t port) {
+static int telemetry_init(telemetry_sock_t *sock, uint16_t port) {
 
     /* Initialize the socket connection. */
-    telem->sock = socket(AF_INET, SOCK_STREAM, 0);
-    if (telem->sock < 0) return errno;
+    sock->sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (sock->sock < 0) return errno;
 
     /* Create address */
-
-    telem->addr.sin_family = AF_INET;
-    telem->addr.sin_addr.s_addr = INADDR_ANY;
-    telem->addr.sin_port = htons(port);
-
-    /* Make sure client socket fd is marked as invalid until it gets a connection */
-    for (unsigned int i = 0; i < MAX_TELEMETRY; i++) {
-        telem->clients[i] = -1;
-    }
-
-    return 0;
-}
-
-/* TODO: docs */
-int telemetry_accept(telemetry_t *telem) {
+    sock->addr.sin_family = AF_INET;
+    sock->addr.sin_addr.s_addr = INADDR_ANY;
+    sock->addr.sin_port = htons(port);
 
     /* Bind the controller socket */
-    if (bind(telem->sock, (struct sockaddr *)&telem->addr, sizeof(telem->addr)) < 0) {
+    if (bind(sock->sock, (struct sockaddr *)&sock->addr, sizeof(sock->addr)) < 0) {
         return errno;
     }
 
-    /* Listen for a controller client connection */
-    if (listen(telem->sock, MAX_TELEMETRY) < 0) {
+    /* Listen for a sock client connection */
+    if (listen(sock->sock, MAX_TELEMETRY) < 0) {
         return errno;
-    }
-
-    /* Accept the first incoming connection. */
-    socklen_t addrlen = sizeof(telem->addr);
-    for (unsigned int i = 0; i < MAX_TELEMETRY; i++) {
-
-        /* Found a free spot for a client */
-        if (telem->clients[i] == -1) {
-            /* Try to connect the client */
-            telem->clients[i] = accept(telem->sock, (struct sockaddr *)&telem->addr, &addrlen);
-            if (telem->clients[i] < 0) {
-                return errno;
-            }
-            break; /* Connection successful, exit loop */
-        }
     }
 
     return 0;
 }
 
-/* TODO: docs */
-int telemetry_disconnect_all(telemetry_t *telem) {
-    int res;
-    int err;
+/*
+ * Initializes a list of clients.
+ * @param l The list to initialize.
+ */
+static void client_list_init(client_l_t *l) {
+    l->connected = 0;
+    // TODO: do I need to handle pthread errors
+    pthread_mutex_init(&l->lock, NULL);
+    pthread_cond_init(&l->space_avail, NULL);
     for (unsigned int i = 0; i < MAX_TELEMETRY; i++) {
-        if (telem->clients[i] != -1) {
-            res = close(telem->clients[i]);
-            if (res == -1) err = errno;
-            telem->clients[i] = -1; // Mark as invalid
+        l->clients[i] = -1;
+    }
+}
+
+/*
+ * Add a client to the list of clients.
+ * @param l The list of clients to add to.
+ * @param client The client to add to the list.
+ * @return 0 on success, error code on failure.
+ */
+static int client_list_add(client_l_t *l, int client) {
+
+    // TODO: do I need to handle return errors on pthread functions?
+    pthread_mutex_lock(&l->lock);
+
+    /* No space, don't add client */
+    while (l->connected == MAX_TELEMETRY) {
+        pthread_cond_wait(&l->space_avail, &l->lock);
+    }
+
+    /* There is space, add the client */
+    l->connected++;
+    for (unsigned int i = 0; i < MAX_TELEMETRY; i++) {
+        if (l->clients[i] == -1) {
+            l->clients[i] = client;
+            pthread_mutex_unlock(&l->lock);
+            return 0;
         }
     }
 
-    /* Close primary socket */
-    res = close(telem->sock);
-    if (res == -1) return errno;
-    return err;
+    /* We should never get here, because this means the client list has recorded that there is space when there isn't
+     * any.
+     */
+    assert(0 && "Client list lied about space available.");
+    pthread_mutex_unlock(&l->lock);
+    return EAGAIN;
 }
 
-/* TODO: docs */
-ssize_t telemetry_send(telemetry_t *telem, unsigned int id, void *buf, size_t n) {
-    if (telem->clients[id] == -1) {
-        return n;
-    }
-    return send(telem->clients[id], buf, n, 0);
+/*
+ * Remove a client from the list.
+ * @param client_id The ID of the client to remove.
+ * @return 0 on success, error code on failure.
+ */
+static int client_list_remove(client_l_t *l, int client_id) {
+
+    assert(0 <= client_id && client_id < MAX_TELEMETRY);
+
+    // TODO: handle pthread function errors?
+    pthread_mutex_lock(&l->lock);
+    l->clients[client_id] = -1;
+    pthread_mutex_unlock(&l->lock);
+
+    return 0;
 }
 
-/* TODO: docs */
-void *telemetry_run(void *arg) {
+/*
+ * Thread to continuously accept new connections as long as there's space.
+ * @param arg Arguments to the connection accepting thread of type `struct accept_args`.
+ * @return The thread's exit code.
+ */
+static void *telemetry_accept_thread(void *arg) {
 
+    struct accept_args *args = (struct accept_args *)(arg);
+    int new_client;
     int err;
-    telemetry_t telem;
-    padstate_t *state = ((telemetry_args_t *)(arg))->state;
-    uint16_t port = ((telemetry_args_t *)(arg))->port;
-    sem_t die = ((telemetry_args_t *)(arg))->die;
-    const char *data_file = ((telemetry_args_t *)(arg))->data_file;
-
-    err = telemetry_init(&telem, port);
-    if (err) {
-        fprintf(stderr, "Could not initialize telemetry stream with error: %s\n", strerror(err));
-        pthread_exit((void *)(long int)err);
-    }
-
-    err = telemetry_accept(&telem);
-    if (err) {
-        fprintf(stderr, "Error connecting telemetry client: %s\n", strerror(err));
-        pthread_exit((void *)(long int)(err));
-    }
-    printf("Telemetry client connected!\n");
-
-    /* Open dummy data file */
-
-    // TODO: remove abspath
-    FILE *data = fopen(data_file, "r");
-    if (data == NULL) {
-        fprintf(stderr, "Could not open dummy data: %s\n", strerror(errno));
-        telemetry_disconnect_all(&telem);
-        pthread_exit((void *)(long int)errno);
-    }
-    // Discard labels
-    fgets(buffer, BUFSIZ, data);
-
-    /* Send telemetry */
-
-    header_p hdr = {.type = TYPE_TELEM};
-    ssize_t sent;
 
     for (;;) {
 
-        /* Continually loop over file */
-        if (feof(data)) {
-            if (fseek(data, 0, SEEK_SET) == -1) {
-                fprintf(stderr, "Couldn't rewind data with error: %s\n", strerror(errno));
-                telemetry_disconnect_all(&telem);
-                pthread_exit((void *)(long int)errno);
-            }
-            fgets(buffer, BUFSIZ, data); // Discard labels
+        /* Accept the first incoming connection. */
+        new_client = accept(args->master_sock, NULL, 0);
+        if (new_client < 0) {
+            fprintf(stderr, "Couldn't accept connection with error: %s\n", strerror(errno));
         }
 
-        // Get next line
-        if (fgets(buffer, BUFSIZ, data) == NULL) {
-            continue; // Handle EOF
+        /* Add the client to the list. */
+        err = client_list_add(args->list, new_client);
+        if (err) {
+            printf("Couldn't add new client to the list with error: %s\n", strerror(errno));
         }
-
-        /* Time */
-        char *timestr = strtok(buffer, ",");
-        uint32_t time = strtoul(timestr, NULL, 10);
-
-        /* Mass */
-        char *massstr = strtok(NULL, ",");
-        uint32_t mass = strtoul(massstr, NULL, 10) * 1000;
-
-        /* Pressure 1 */
-        char *p1str = strtok(NULL, ",");
-        uint32_t p1 = strtoul(p1str, NULL, 10) * 1000;
-
-        /* Pressure 2 */
-        char *p2str = strtok(NULL, ",");
-        uint32_t p2 = strtoul(p2str, NULL, 10) * 1000;
-
-        for (unsigned int i = 0; i < MAX_TELEMETRY; i++) {
-
-            hdr.subtype = TELEM_PRESSURE;
-            pressure_p pkt = {.time = time, .pressure = p1, .id = 1};
-
-            sent = telemetry_send(&telem, i, &hdr, sizeof(hdr));
-            if (sent == -1) {
-                fprintf(stderr, "Could not send packet header to client %u: %s\n", i, strerror(errno));
-                telem.clients[i] = -1;
-            } else if (sent == 0) {
-                fprintf(stderr, "Client %u disconnected.\n", i);
-                telem.clients[i] = -1;
-            }
-
-            sent = telemetry_send(&telem, i, &pkt, sizeof(pkt));
-            if (sent == -1) {
-                fprintf(stderr, "Could not send packet to client %u: %s\n", i, strerror(errno));
-                telem.clients[i] = -1;
-            } else if (sent == 0) {
-                fprintf(stderr, "Client %u disconnected.\n", i);
-                telem.clients[i] = -1;
-            }
-        }
-
-        /* Check for interrupt */
-        int num_threads;
-        int value = sem_getvalue(&die, &num_threads);
-        if (value == -1) pthread_exit((void *)(long int)errno);
-        if (value > 0) {
-            printf("Telemetry terminating...\n");
-            telemetry_disconnect_all(&telem);
-            pthread_exit(0);
-        }
-        usleep(10);
     }
 
-    telemetry_disconnect_all(&telem);
+    return 0;
+}
+
+/*
+ * Run the thread responsible for transmitting telemetry data.
+ * TODO: handle being killed
+ * @param arg The arguments to the telemetry thread, of type `telemetry_args_t`.
+ */
+void *telemetry_run(void *arg) {
+
+    telemetry_args_t *args = (telemetry_args_t *)(arg);
+    char buffer[BUFSIZ];
+    int err;
+
+    /* Null telemetry file means nothing to do */
+    if (args->data_file == NULL) thread_return(0);
+
+    /* Start telemetry socket */
+    telemetry_sock_t telem;
+    err = telemetry_init(&telem, args->port);
+    if (err) {
+        fprintf(stderr, "Could not start telemetry socket: %s\n", strerror(err));
+        thread_return(err);
+    }
+
+    /* Create client list */
+    client_l_t list;
+    client_list_init(&list);
+
+    /* Start thread to accept new connections */
+    pthread_t accept_thread;
+    struct accept_args accept_thread_args = {.list = &list, .master_sock = telem.sock};
+    err = pthread_create(&accept_thread, NULL, telemetry_accept_thread, &accept_thread_args);
+    if (err) {
+        fprintf(stderr, "Could not create thread to accept new connections: %s\n", strerror(err));
+        thread_return(err);
+    }
+
+    /* Open telemetry file */
+    FILE *data = fopen(args->data_file, "r");
+    if (data == NULL) {
+        fprintf(stderr, "Could not open telemetry file \"%s\" with error: %s\n", args->data_file, strerror(errno));
+        pthread_kill(accept_thread, SIGINT);
+        thread_return(err);
+    }
+
+    /* Start transmitting telemetry to active clients */
+    for (;;) {
+
+        /* Handle file errors */
+        if (ferror(data)) {
+            fprintf(stderr, "Error reading telemetry file: %s\n", strerror(errno));
+            pthread_kill(accept_thread, SIGINT);
+            thread_return(err);
+        }
+
+        /* Read from file in a loop */
+        if (feof(data)) rewind(data);
+
+        /* Read next line */
+        if (fgets(buffer, sizeof(buffer), data) == NULL) {
+            continue;
+        }
+
+        /* TODO: parse data */
+        header_p hdr = {.type = TYPE_TELEM, .subtype = TELEM_PRESSURE};
+        pressure_p pkt = {.id = 0, .time = 0, .pressure = 1000};
+
+        /* Send data to all clients. */
+        ssize_t sent;
+
+        // TODO: handle errors from mutex function calls
+        // TODO: client list could have some API for sending to all?
+        // How to handle needing multiple synchronized sends? (one for header, one for packet)
+        err = pthread_mutex_lock(&list.lock); // Exclusive access to clients
+
+        for (unsigned int i = 0; i < MAX_TELEMETRY; i++) {
+            if (list.clients[i] == -1) continue; // Client is not connected
+
+            // TODO: handle errors here where client disconnects
+            sent = send(list.clients[i], &hdr, sizeof(hdr), 0);
+
+            if (sent == 0) {
+                printf("Client %u disconnected.\n", i);
+                client_list_remove(&list, i);
+                continue;
+            }
+
+            if (sent == -1) {
+                fprintf(stderr, "Could not send to client %u with error: %s\n", i, strerror(errno));
+                client_list_remove(&list, i);
+                continue;
+            }
+
+            err = send(list.clients[i], &pkt, sizeof(pkt), 0);
+            if (sent == 0) {
+                printf("Client %u disconnected.\n", i);
+                client_list_remove(&list, i);
+                continue;
+            }
+
+            if (sent == -1) {
+                fprintf(stderr, "Could not send to client %u with error: %s\n", i, strerror(errno));
+                client_list_remove(&list, i);
+                continue;
+            }
+        }
+
+        err = pthread_mutex_unlock(&list.lock); // Release access to client list
+    }
+
     return 0;
 }
