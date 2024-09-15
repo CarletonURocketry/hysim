@@ -31,26 +31,21 @@ void int_handler(int sig) {
     (void)(sig);
     int err;
 
-    /* Tell threads to die. TODO: handle err */
-    err = pthread_cancel(telem_thread);
-
-    sem_post(&controller_args.die);
-
+    /* Tell threads to die. */
     printf("Terminating server...\n");
 
-    /* Wait for control thread to end */
-    err = pthread_join(controller_thread, NULL);
+    err = pthread_cancel(telem_thread);
     if (err) {
-        fprintf(stderr, "Controller thread exited with error: %s\n", strerror(err));
-    }
-    printf("Controller thread terminated.\n");
-
-    /* Wait for telemetry thread to end */
-    err = pthread_join(telem_thread, NULL);
-    if (err) {
-        fprintf(stderr, "Telemetry thread exited with error: %s\n", strerror(err));
+        fprintf(stderr, "Telemetry could not be terminated with error: %s\n", strerror(err));
     }
     printf("Telemetry thread terminated.\n");
+
+    /* Wait for control thread to end */
+    err = pthread_cancel(controller_thread);
+    if (err) {
+        fprintf(stderr, "Controller thread could not be terminated with error: %s\n", strerror(err));
+    }
+    printf("Controller thread terminated.\n");
 
     exit(EXIT_SUCCESS);
 }

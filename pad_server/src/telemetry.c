@@ -173,6 +173,7 @@ static void *telemetry_accept_thread(void *arg) {
         if (err) {
             fprintf(stderr, "Couldn't add new client to the list with error: %s\n", strerror(errno));
         }
+        printf("New telemetry client connected\n");
     }
 
     thread_return(0);
@@ -195,7 +196,10 @@ void *telemetry_run(void *arg) {
     int err;
 
     /* Null telemetry file means nothing to do */
-    if (args->data_file == NULL) thread_return(0);
+    if (args->data_file == NULL) {
+        printf("No telemetry data to send.\n");
+        thread_return(0);
+    }
 
     /* Start telemetry socket */
     telemetry_sock_t telem;

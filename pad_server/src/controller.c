@@ -1,5 +1,3 @@
-#include "controller.h"
-#include "../../packets/packet.h"
 #include <errno.h>
 #include <semaphore.h>
 #include <stdio.h>
@@ -8,13 +6,19 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+#include "../../packets/packet.h"
+#include "controller.h"
+
+/* Helper function for returning an error code from a thread */
+#define thread_return(e) pthread_exit((void *)(unsigned long)((e)))
+
 /*
  * Initializes the controller to be ready to create a TCP connection.
  * @param controller The controller to initialize.
  * @param port The port to use for the connection.
  * @return 0 for success, or the error that occurred.
  */
-int controller_init(controller_t *controller, uint16_t port) {
+static int controller_init(controller_t *controller, uint16_t port) {
 
     /* Initialize the socket connection. */
     controller->sock = socket(AF_INET, SOCK_STREAM, 0);
@@ -37,7 +41,7 @@ int controller_init(controller_t *controller, uint16_t port) {
  * @param controller The controller to use for the connection.
  * @return 0 for success, or the error that occurred.
  */
-int controller_accept(controller_t *controller) {
+static int controller_accept(controller_t *controller) {
 
     /* Bind the controller socket */
     if (bind(controller->sock, (struct sockaddr *)&controller->addr, sizeof(controller->addr)) < 0) {
@@ -64,7 +68,7 @@ int controller_accept(controller_t *controller) {
  * @param The controller to close the connection to.
  * @return 0 for success, the error that occurred otherwise.
  */
-int controller_disconnect(controller_t *controller) {
+static int controller_disconnect(controller_t *controller) {
 
     if (close(controller->client) < 0) {
         return errno;
@@ -78,38 +82,43 @@ int controller_disconnect(controller_t *controller) {
 }
 
 /*
+ * pthread cleanup handler for the controller.
+ * @param arg A controller to disconnect and clean up.
+ */
+static void controller_cleanup(void *arg) { controller_disconnect((controller_t *)(arg)); }
+
+/*
  * Receive bytes from the controller client.
  * @param controller The controller to receive from.
  * @param buf The buffer to receive into. Must be at least `n` bytes long.
  * @param n The number of bytes to receive. Must be less than or equal to the length of `buf`.
  * @return The number of bytes read. 0 indicates no more bytes, -1 indicates an error and `errno` will be set.
  */
-ssize_t controller_recv(controller_t *controller, void *buf, size_t n) { return recv(controller->client, buf, n, 0); }
+static ssize_t controller_recv(controller_t *controller, void *buf, size_t n) {
+    return recv(controller->client, buf, n, 0);
+}
 
 /* Run the controller logic
  * TODO: docs
  */
 void *controller_run(void *arg) {
 
-    padstate_t *state = ((controller_args_t *)(arg))->state;
-    uint16_t port = ((controller_args_t *)(arg))->port;
-    sem_t die = ((controller_args_t *)(arg))->die;
-
+    controller_args_t *args = (controller_args_t *)(arg);
     controller_t controller;
-
-    /* Connect to the controller */
     int err;
 
-    err = controller_init(&controller, port);
+    /* Connect to the controller */
+    err = controller_init(&controller, args->port);
     if (err) {
         fprintf(stderr, "Could not initialize controller with error: %s\n", strerror(err));
-        pthread_exit((void *)(long int)err);
+        thread_return(err);
     }
+    pthread_cleanup_push(controller_cleanup, &controller);
 
     err = controller_accept(&controller);
     if (err) {
         fprintf(stderr, "Could not connect to controller with error: %s\n", strerror(err));
-        pthread_exit((void *)(long int)err);
+        thread_return(err);
     }
     printf("Controller connected!\n");
 
@@ -124,12 +133,10 @@ void *controller_run(void *arg) {
 
         if (bread == -1) {
             fprintf(stderr, "Error reading message header: %s\n", strerror(errno));
-            controller_disconnect(&controller);
-            pthread_exit((void *)(long int)errno);
+            thread_return(EXIT_FAILURE);
         } else if (bread == 0) {
             fprintf(stderr, "Control box disconnected.\n");
-            controller_disconnect(&controller);
-            pthread_exit((void *)EXIT_FAILURE);
+            thread_return(EXIT_FAILURE);
         }
 
         // TODO: handle recv errors
@@ -141,8 +148,7 @@ void *controller_run(void *arg) {
             case CNTRL_ACT_ACK:
             case CNTRL_ARM_ACK:
                 fprintf(stderr, "Unexpectedly received acknowledgement from sender.\n");
-                controller_disconnect(&controller);
-                pthread_exit((void *)EXIT_FAILURE);
+                thread_return(EXIT_FAILURE);
                 break;
             case CNTRL_ACT_REQ: {
                 act_req_p req;
@@ -159,22 +165,11 @@ void *controller_run(void *arg) {
             break;
         default:
             fprintf(stderr, "Invalid message type: %u\n", hdr.type);
-            controller_disconnect(&controller);
-            pthread_exit((void *)EXIT_FAILURE);
+            thread_return(EXIT_FAILURE);
             break;
-        }
-
-        /* Check for interrupt */
-        int num_threads;
-        int value = sem_getvalue(&die, &num_threads);
-        if (value == -1) pthread_exit((void *)(long int)errno);
-        if (value > 0) {
-            printf("Controller terminating...\n");
-            controller_disconnect(&controller);
-            pthread_exit(0);
         }
     }
 
-    controller_disconnect(&controller);
-    return 0;
+    thread_return(0); // Normal return
+    pthread_cleanup_pop(1);
 }
