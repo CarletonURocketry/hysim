@@ -82,7 +82,7 @@ static int telemetry_close(telemetry_sock_t *sock) {
  * @param arg A pointer to a telemetry socket.
  * @return 0 on success, error code on error.
  */
-static void *telemetry_cleanup(void *arg) { thread_return(telemetry_close((telemetry_sock_t *)(arg))); }
+static void telemetry_cleanup(void *arg) { telemetry_close((telemetry_sock_t *)(arg)); }
 
 /*
  * Initializes a list of clients.
@@ -171,21 +171,18 @@ static void *telemetry_accept_thread(void *arg) {
         /* Add the client to the list. */
         err = client_list_add(args->list, new_client);
         if (err) {
-            printf("Couldn't add new client to the list with error: %s\n", strerror(errno));
+            fprintf(stderr, "Couldn't add new client to the list with error: %s\n", strerror(errno));
         }
     }
 
-    return 0;
+    thread_return(0);
 }
 
 /*
  * Cleanup function to kill a thread.
  * @param arg A pointer to the pthread_t thread handle.
  */
-static void *thread_int(void *arg) {
-    pthread_kill(*(pthread_t *)(arg), SIGINT);
-    return 0;
-}
+static void cancel_wrapper(void *arg) { pthread_cancel(*(pthread_t *)(arg)); }
 
 /*
  * Run the thread responsible for transmitting telemetry data.
@@ -221,7 +218,7 @@ void *telemetry_run(void *arg) {
         fprintf(stderr, "Could not create thread to accept new connections: %s\n", strerror(err));
         thread_return(err);
     }
-    pthread_cleanup_push(thread_int, &accept_thread);
+    pthread_cleanup_push(cancel_wrapper, &accept_thread);
 
     /* Open telemetry file */
     FILE *data = fopen(args->data_file, "r");
