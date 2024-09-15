@@ -1,8 +1,6 @@
 #include <assert.h>
 #include <errno.h>
 #include <pthread.h>
-#include <semaphore.h>
-#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -143,6 +141,7 @@ static int client_list_remove(client_l_t *l, int client_id) {
 
     // TODO: handle pthread function errors?
     pthread_mutex_lock(&l->lock);
+    close(l->clients[client_id]);
     l->clients[client_id] = -1;
     pthread_mutex_unlock(&l->lock);
 
@@ -163,6 +162,7 @@ static void *telemetry_accept_thread(void *arg) {
     for (;;) {
 
         /* Accept the first incoming connection. */
+        printf("Waiting for telemetry connection...\n");
         new_client = accept(args->master_sock, NULL, 0);
         if (new_client < 0) {
             fprintf(stderr, "Couldn't accept connection with error: %s\n", strerror(errno));
@@ -241,50 +241,57 @@ void *telemetry_run(void *arg) {
         }
 
         /* Read from file in a loop */
-        if (feof(data)) rewind(data);
+        if (feof(data)) {
+            rewind(data);
+        }
 
         /* Read next line */
         if (fgets(buffer, sizeof(buffer), data) == NULL) {
             continue;
         }
 
-        /* TODO: parse data */
-        header_p hdr = {.type = TYPE_TELEM, .subtype = TELEM_PRESSURE};
-        pressure_p pkt = {.id = 0, .time = 0, .pressure = 1000};
+        /* TODO: parse all data */
+        char *rest = buffer;
+        char *time_str = strtok_r(buffer, ",", &rest);
+        uint32_t time = strtoul(time_str, NULL, 10);
+        char *pstr = strtok_r(buffer, ",", &rest);
+        uint32_t pressure = strtoul(pstr, NULL, 10);
 
-        /* Send data to all clients. */
-        ssize_t sent;
+        header_p hdr = {.type = TYPE_TELEM, .subtype = TELEM_PRESSURE};
+        pressure_p pkt = {.id = 0, .time = time, .pressure = pressure};
 
         // TODO: handle errors from mutex function calls
         // TODO: client list could have some API for sending to all?
         // How to handle needing multiple synchronized sends behind monitor? (one for header, one for packet)
         err = pthread_mutex_lock(&list.lock); // Exclusive access to clients
+        if (err) {
+            fprintf(stderr, "Could not get exclusive access to client list: %s\n", strerror(err));
+            continue;
+        }
 
+        /* Send data to all clients. */
+        ssize_t sent;
         for (unsigned int i = 0; i < MAX_TELEMETRY; i++) {
+
             if (list.clients[i] == -1) continue; // Client is not connected
 
             sent = send(list.clients[i], &hdr, sizeof(hdr), 0);
-
             if (sent == 0) {
                 printf("Client %u disconnected.\n", i);
                 client_list_remove(&list, i);
                 continue;
-            }
-
-            if (sent == -1) {
+            } else if (sent == -1) {
                 fprintf(stderr, "Could not send to client %u with error: %s\n", i, strerror(errno));
                 client_list_remove(&list, i);
                 continue;
             }
 
-            err = send(list.clients[i], &pkt, sizeof(pkt), 0);
+            sent = send(list.clients[i], &pkt, sizeof(pkt), 0);
             if (sent == 0) {
                 printf("Client %u disconnected.\n", i);
                 client_list_remove(&list, i);
                 continue;
-            }
-
-            if (sent == -1) {
+            } else if (sent == -1) {
                 fprintf(stderr, "Could not send to client %u with error: %s\n", i, strerror(errno));
                 client_list_remove(&list, i);
                 continue;
@@ -292,6 +299,10 @@ void *telemetry_run(void *arg) {
         }
 
         err = pthread_mutex_unlock(&list.lock); // Release access to client list
+        if (err) {
+            fprintf(stderr, "Could not release access to client list: %s\n", strerror(err));
+        }
+        usleep(1000);
     }
 
     thread_return(0); // Normal return
