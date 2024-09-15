@@ -11,7 +11,7 @@
 #include <unistd.h>
 
 #include "controller.h"
-#include "helptext.h"
+#include "helptext/helptext.h"
 #include "state.h"
 #include "telemetry.h"
 
