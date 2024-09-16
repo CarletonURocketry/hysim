@@ -55,11 +55,6 @@ static int telemetry_init(telemetry_sock_t *sock, uint16_t port) {
         return errno;
     }
 
-    /* Listen for a sock client connection */
-    if (listen(sock->sock, MAX_TELEMETRY) < 0) {
-        return errno;
-    }
-
     return 0;
 }
 
@@ -143,14 +138,17 @@ static int client_list_remove(client_l_t *l, unsigned int client_id) {
 
     assert(client_id < MAX_TELEMETRY);
 
-    err = pthread_mutex_lock(&l->lock); // TODO: calling this with mutex lock breaks things.
+    err = pthread_mutex_lock(&l->lock);
     if (err) return err;
 
     if (close(l->clients[client_id]) < 0) {
         ret = errno;
     }
     l->clients[client_id] = -1;
+    l->connected--;
     ret = 0;
+    err = pthread_cond_signal(&l->space_avail); // Signal another client can be added
+    if (err) ret = err;
 
     err = pthread_mutex_unlock(&l->lock);
     if (err) return err;
@@ -215,8 +213,12 @@ static void *telemetry_accept_thread(void *arg) {
 
     for (;;) {
 
+        /* Listen for one allowed connection. */
+        if (listen(args->master_sock, 1) < 0) {
+            fprintf(stderr, "Could not listen for new clients with error: %s\n", strerror(errno));
+        }
+
         /* Accept the first incoming connection. */
-        printf("Waiting for telemetry connection...\n");
         new_client = accept(args->master_sock, NULL, 0);
         if (new_client < 0) {
             fprintf(stderr, "Couldn't accept connection with error: %s\n", strerror(errno));
@@ -227,7 +229,7 @@ static void *telemetry_accept_thread(void *arg) {
         if (err) {
             fprintf(stderr, "Couldn't add new client to the list with error: %s\n", strerror(errno));
         }
-        printf("New telemetry client connected\n");
+        printf("New telemetry client connected.\n");
     }
 
     thread_return(0);
