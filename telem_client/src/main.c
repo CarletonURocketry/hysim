@@ -17,16 +17,21 @@ stream_t telem_stream;
 
 /* End of stream detected */
 void stream_over(void) {
+    int err;
     printf("End of stream.\n");
-    stream_disconnect(&telem_stream);
+    err = stream_disconnect(&telem_stream);
+    if (err) {
+        fprintf(stderr, "Couldn't close connection: %s\n", strerror(err));
+        exit(EXIT_FAILURE);
+    }
     exit(EXIT_SUCCESS);
 }
 
 /* Handle Ctrl + C (SIGINT) */
 void handle_int(int sig) {
     (void)sig;
-    stream_disconnect(&telem_stream);
-    exit(EXIT_SUCCESS);
+    int err = stream_disconnect(&telem_stream);
+    exit(err);
 }
 
 int main(int argc, char **argv) {

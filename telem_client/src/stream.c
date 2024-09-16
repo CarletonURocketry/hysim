@@ -35,7 +35,7 @@ int stream_init(stream_t *stream, const char *ip, uint16_t port) {
 }
 
 /*
- * Connect the stream to the its telemetry server.
+ * Connect the stream to the telemetry server.
  * TODO: docs
  */
 int stream_connect(stream_t *stream) {
