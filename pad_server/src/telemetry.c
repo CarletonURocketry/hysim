@@ -136,14 +136,14 @@ static int client_list_add(client_l_t *l, int client) {
  * @param client_id The ID of the client to remove.
  * @return 0 on success, error code on failure.
  */
-static int client_list_remove(client_l_t *l, int client_id) {
+static int client_list_remove(client_l_t *l, unsigned int client_id) {
 
     int ret;
     int err;
 
-    assert(0 <= client_id && client_id < MAX_TELEMETRY);
+    assert(client_id < MAX_TELEMETRY);
 
-    err = pthread_mutex_lock(&l->lock);
+    err = pthread_mutex_lock(&l->lock); // TODO: calling this with mutex lock breaks things.
     if (err) return err;
 
     if (close(l->clients[client_id]) < 0) {
@@ -155,6 +155,51 @@ static int client_list_remove(client_l_t *l, int client_id) {
     err = pthread_mutex_unlock(&l->lock);
     if (err) return err;
     return ret;
+}
+
+/*
+ * Send a message to the client.
+ * @param l The client list to use.
+ * @param client_id The client to send to.
+ * @param msg The message to send.
+ */
+static ssize_t client_list_send(client_l_t *l, unsigned int client_id, struct msghdr *msg) {
+    assert(client_id < MAX_TELEMETRY);
+    pthread_mutex_lock(&l->lock);
+    ssize_t sent = sendmsg(l->clients[client_id], msg, MSG_NOSIGNAL);
+    pthread_mutex_unlock(&l->lock);
+    return sent;
+}
+
+static bool client_list_active(client_l_t *l, unsigned int client_id) {
+    assert(client_id < MAX_TELEMETRY);
+    pthread_mutex_lock(&l->lock);
+    bool ret = l->clients[client_id] != -1;
+    pthread_mutex_unlock(&l->lock);
+    return ret;
+}
+
+/*
+ * Send a message to all active clients in the list.
+ * @param l The client list to use.
+ * @param msg The message to send to all active clients.
+ */
+static void client_list_sendall(client_l_t *l, struct msghdr *msg) {
+    ssize_t sent = 0;
+    for (unsigned int i = 0; i < MAX_TELEMETRY; i++) {
+
+        if (!client_list_active(l, i)) continue;
+
+        sent = client_list_send(l, i, msg);
+
+        if (sent == -1) {
+            fprintf(stderr, "Could not sent to client %u with error: %s\n", i, strerror(errno));
+            client_list_remove(l, i);
+        } else if (sent == 0) {
+            printf("Client %u disconnected.\n", i);
+            client_list_remove(l, i);
+        }
+    }
 }
 
 /*
@@ -267,49 +312,24 @@ void *telemetry_run(void *arg) {
         uint32_t pressure = strtoul(pstr, NULL, 10);
 
         header_p hdr = {.type = TYPE_TELEM, .subtype = TELEM_PRESSURE};
-        pressure_p pkt = {.id = 0, .time = time, .pressure = pressure};
-
-        // TODO: client list could have some API for sending to all?
-        // How to handle needing multiple synchronized sends behind monitor? (one for header, one for packet)
-        err = pthread_mutex_lock(&list.lock); // Exclusive access to clients
-        if (err) {
-            fprintf(stderr, "Could not get exclusive access to client list: %s\n", strerror(err));
-            continue;
-        }
+        pressure_p body = {.id = 0, .time = time, .pressure = pressure};
 
         /* Send data to all clients. */
-        ssize_t sent;
-        for (unsigned int i = 0; i < MAX_TELEMETRY; i++) {
+        struct iovec pkt[2] = {
+            {.iov_base = &hdr, .iov_len = sizeof(hdr)},
+            {.iov_base = &body, .iov_len = sizeof(body)},
+        };
+        struct msghdr msg = {
+            .msg_name = NULL,
+            .msg_namelen = 0,
+            .msg_iov = pkt,
+            .msg_iovlen = (sizeof(pkt) / sizeof(struct iovec)),
+            .msg_control = NULL,
+            .msg_controllen = 0,
+            .msg_flags = 0,
+        };
+        client_list_sendall(&list, &msg);
 
-            if (list.clients[i] == -1) continue; // Client is not connected
-
-            sent = send(list.clients[i], &hdr, sizeof(hdr), 0);
-            if (sent == 0) {
-                printf("Client %u disconnected.\n", i);
-                client_list_remove(&list, i);
-                continue;
-            } else if (sent == -1) {
-                fprintf(stderr, "Could not send to client %u with error: %s\n", i, strerror(errno));
-                client_list_remove(&list, i);
-                continue;
-            }
-
-            sent = send(list.clients[i], &pkt, sizeof(pkt), 0);
-            if (sent == 0) {
-                printf("Client %u disconnected.\n", i);
-                client_list_remove(&list, i);
-                continue;
-            } else if (sent == -1) {
-                fprintf(stderr, "Could not send to client %u with error: %s\n", i, strerror(errno));
-                client_list_remove(&list, i);
-                continue;
-            }
-        }
-
-        err = pthread_mutex_unlock(&list.lock); // Release access to client list
-        if (err) {
-            fprintf(stderr, "Could not release access to client list: %s\n", strerror(err));
-        }
         usleep(1000);
     }
 
