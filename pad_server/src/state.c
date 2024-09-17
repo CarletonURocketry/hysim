@@ -1,16 +1,6 @@
 #include "state.h"
 #include <pthread.h>
 
-const char *ACTUATOR_STR[NUM_ACTUATORS] = {
-    [0] = "Fire valve", [1] = "XV1",
-    [2] = "XV2",        [3] = "XV3",
-    [4] = "XV4",        [5] = "XV5",
-    [6] = "XV6",        [7] = "XV7",
-    [8] = "XV8",        [9] = "XV9",
-    [10] = "XV10",      [11] = "XV11",
-    [12] = "XV12",      [13] = "Quick disconnect",
-};
-
 /* TODO: docs */
 void padstate_init(padstate_t *state) {
     pthread_mutex_init(&state->lock, NULL);
@@ -52,6 +42,3 @@ int padstate_actuate(padstate_t *state, uint8_t id, bool new_state) {
 
     return 0;
 }
-
-/* TODO: docs */
-const char *actuator_name(uint8_t id) { return ACTUATOR_STR[id]; }
