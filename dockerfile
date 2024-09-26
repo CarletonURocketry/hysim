@@ -12,11 +12,14 @@ WORKDIR /usr/src/app
 # Copy the source code into the container
 COPY . .
 
-# Compile the C application
+# Compile application
 RUN make all
 
-# Expose the TCP port (e.g., port 8080)
-EXPOSE 50002
+# Expose TCP port for control socket
+EXPOSE 50001/TCP
 
-# Run the application
+# Expose TCP port telemetry socket
+EXPOSE 50002/TCP
+
+# Run the application using coldflow-fill.csv data
 CMD ["./pad_server/pad", "-f", "coldflow-fill.csv"]
