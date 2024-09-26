@@ -82,6 +82,7 @@ void int_handler(int sig) {
  */
 
 int main(int argc, char **argv) {
+
     /* Parse command line options. */
 
     int c;
@@ -110,6 +111,7 @@ int main(int argc, char **argv) {
     if (is_running_in_docker()){
         setvbuf(stdout, NULL, _IONBF, 0);
     }
+    printf("Running...\n");
 
     if (telemetry_args.port == controller_args.port) {
         fprintf(stderr, "Cannot use the same port number (%u) for both telemetry and control connections.\n",
