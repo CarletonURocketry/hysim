@@ -111,7 +111,6 @@ int main(int argc, char **argv) {
     if (is_running_in_docker()){
         setvbuf(stdout, NULL, _IONBF, 0);
     }
-    printf("Running...\n");
 
     if (telemetry_args.port == controller_args.port) {
         fprintf(stderr, "Cannot use the same port number (%u) for both telemetry and control connections.\n",
