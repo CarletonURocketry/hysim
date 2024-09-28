@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -Wall -Wextra
+CFLAGS = -Wall -Wextra -pthread
 OUT = pad
 
 SRCDIR = $(abspath ./src)
