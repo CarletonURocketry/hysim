@@ -1,5 +1,5 @@
 # Use an official Ubuntu image as a base
-FROM ubuntu:latest
+FROM nuttx/nuttx-build-environment:latest
 
 # Update and install build essentials and necessary libraries
 RUN apt-get update && apt-get install -y \
