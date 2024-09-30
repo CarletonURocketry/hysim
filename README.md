@@ -39,8 +39,9 @@ $ control_client/control
 
 ## Running with Docker
 
-If you have docker installed, you can run simulations within a docker container.
+If you have Docker installed, you can run simulations within a Docker container.
 
 To build the image run `docker build . -t hysim`.
 
-In order to be able to receive data over TCP/UDP sockets, we have to manually expose the port when creating the container. To create a container with the exposed port for telemetry data, run `docker run -p 50002:50002 hysim` 
+In order to be able to receive data over TCP/UDP sockets, we have to manually expose the port when creating the 
+container. To create a container with the exposed port for telemetry data, run `docker run -it -p 50002:50002 hysim` 

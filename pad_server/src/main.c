@@ -25,17 +25,6 @@ controller_args_t controller_args = {.port = CONTROL_PORT, .state = &state};
 pthread_t telem_thread;
 telemetry_args_t telemetry_args = {.port = TELEMETRY_PORT, .state = &state, .data_file = NULL};
 
-/*
- * Simple function to check if program is running inside docker container
- */
-int is_running_in_docker() {
-    // Check if the `.dockerenv` file exists
-    if (access("/.dockerenv", F_OK) != -1) {
-        return 1;  // File exists, running inside Docker
-    }
-    return 0;  // File doesn't exist, not running inside Docker
-}
-
 void int_handler(int sig) {
 
     (void)(sig);
@@ -106,10 +95,6 @@ int main(int argc, char **argv) {
             exit(EXIT_FAILURE);
             break;
         }
-    }
-    
-    if (is_running_in_docker()){
-        setvbuf(stdout, NULL, _IONBF, 0);
     }
 
     if (telemetry_args.port == controller_args.port) {
