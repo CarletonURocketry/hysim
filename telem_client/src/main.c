@@ -54,7 +54,7 @@ int main(int argc, char **argv) {
 
     int err;
 
-    err = stream_init(&telem_stream, "127.0.0.1", TELEM_PORT);
+    err = stream_init(&telem_stream, "224.0.0.10", TELEM_PORT);
     if (err) {
         fprintf(stderr, "Could not initialize telemetry stream: %s\n", strerror(err));
         exit(EXIT_FAILURE);
