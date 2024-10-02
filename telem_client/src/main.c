@@ -54,23 +54,11 @@ int main(int argc, char **argv) {
 
     int err;
 
-    err = stream_init(&telem_stream, "127.0.0.1", TELEM_PORT);
+    err = stream_init(&telem_stream, "224.0.0.10", TELEM_PORT);
     if (err) {
         fprintf(stderr, "Could not initialize telemetry stream: %s\n", strerror(err));
         exit(EXIT_FAILURE);
     }
-
-    printf("Waiting to connect...\n");
-    err = ECONNREFUSED;
-    do {
-        err = stream_connect(&telem_stream);
-    } while (err == ECONNREFUSED);
-
-    if (err) {
-        fprintf(stderr, "Could not connect to telemetry stream: %s\n", strerror(err));
-        exit(EXIT_FAILURE);
-    }
-    printf("Connected!\n");
     signal(SIGINT, handle_int);
 
     /* Get messages forever */
