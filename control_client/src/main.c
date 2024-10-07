@@ -80,7 +80,10 @@ int main(int argc, char **argv) {
 
         printf("Press key and hit enter: ");
         key = getc(stdin);
-        putchar('\n');
+        if (key != '\n') {
+            while (getc(stdin) != '\n')
+                ;
+        }
 
         for (unsigned int i = 0; i < sizeof(switches) / sizeof(switches[0]); i++) {
             if (switches[i].key == key) {
@@ -88,8 +91,14 @@ int main(int argc, char **argv) {
                 act_req_p req = {.id = switches[i].act_id, .state = switches[i].state}; // Create message
                 pad_send(&pad, &hdr, sizeof(hdr));
                 pad_send(&pad, &req, sizeof(req));
+                break;
+            }
+
+            if (i == (sizeof(switches) / sizeof(switches[0]) - 1)) {
+                fprintf(stderr, "Invalid key: %c", key);
             }
         }
+        putchar('\n');
     }
 
     pad_disconnect(&pad);
