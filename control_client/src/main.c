@@ -138,8 +138,7 @@ int main(int argc, char **argv) {
                     break;
                 case CNTRL_ARM_REQ:
                     uint8_t *level = commands[i].priv; // get arming level data
-                    arm_req_p arm_req = {.level = *level}; // create message
-
+                    arm_req_p arm_req = {.level = (uint8_t) level}; // create message
                     pad_send(&pad, &hdr, sizeof(hdr));
                     pad_send(&pad, &arm_req, sizeof(arm_req));
                     break;
