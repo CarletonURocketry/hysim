@@ -9,6 +9,7 @@
 #include "../../packets/packet.h"
 #include "helptext.h"
 #include "pad.h"
+#include "../../pad_server/src/actuator.h"
 
 typedef struct {
     uint8_t act_id;
@@ -26,9 +27,11 @@ typedef struct {
 } command_t;
 
 static switch_t switches[] = {
-    {.act_id = 0, .state = false}, {.act_id = 1, .state = false}, {.act_id = 2, .state = false},
-    {.act_id = 3, .state = false}, {.act_id = 4, .state = false}, {.act_id = 5, .state = false},
-    {.act_id = 6, .state = false}, {.act_id = 7, .state = false}, {.act_id = 8, .state = false},
+    {.act_id = ID_FIRE_VALVE, .state = false}, {.act_id = ID_XV1, .state = false}, {.act_id = ID_XV2, .state = false},
+    {.act_id = ID_XV3, .state = false}, {.act_id = ID_XV4, .state = false}, {.act_id = ID_XV5, .state = false},
+    {.act_id = ID_XV6, .state = false}, {.act_id = ID_XV7, .state = false}, {.act_id = ID_XV8, .state = false},
+    {.act_id = ID_XV9, .state = false}, {.act_id = ID_XV10, .state = false}, {.act_id = ID_XV11, .state = false},
+    {.act_id = ID_XV12, .state = false}, {.act_id = ID_QUICK_DISCONNECT, .state = false}, {.act_id = ID_IGNITER, .state = false},
 };
 
 static command_t commands[] = {
@@ -40,16 +43,22 @@ static command_t commands[] = {
     {.key = 'y', .subtype = CNTRL_ACT_REQ, .priv = &switches[5]},
     {.key = 'u', .subtype = CNTRL_ACT_REQ, .priv = &switches[6]},
     {.key = 'i', .subtype = CNTRL_ACT_REQ, .priv = &switches[7]},
-    {.key = 'o', .subtype = CNTRL_ACT_REQ, .priv = &switches[8]},
+    {.key = 'p', .subtype = CNTRL_ACT_REQ, .priv = &switches[8]},
+    {.key = 'a', .subtype = CNTRL_ACT_REQ, .priv = &switches[9]},
+    {.key = 's', .subtype = CNTRL_ACT_REQ, .priv = &switches[10]},
+    {.key = 'd', .subtype = CNTRL_ACT_REQ, .priv = &switches[11]},
+    {.key = 'f', .subtype = CNTRL_ACT_REQ, .priv = &switches[12]},
+    {.key = 'g', .subtype = CNTRL_ACT_REQ, .priv = &switches[13]},
+    {.key = 'h', .subtype = CNTRL_ACT_REQ, .priv = &switches[14]},
     
-    {.key = 'a', .subtype = CNTRL_ARM_REQ, .priv = (int *)0},
-    {.key = 's', .subtype = CNTRL_ARM_REQ, .priv = (int *)1},
-    {.key = 'd', .subtype = CNTRL_ARM_REQ, .priv = (int *)2},
-    {.key = 'f', .subtype = CNTRL_ARM_REQ, .priv = (int *)3},
-    {.key = 'g', .subtype = CNTRL_ARM_REQ, .priv = (int *)4},
-    {.key = 'h', .subtype = CNTRL_ARM_REQ, .priv = (int *)5},
-    {.key = 'j', .subtype = CNTRL_ARM_REQ, .priv = (int *)6},
-    {.key = 'k', .subtype = CNTRL_ARM_REQ, .priv = (int *)7},
+    {.key = 'z', .subtype = CNTRL_ARM_REQ, .priv = (int *)ARMED_PAD},
+    {.key = 'x', .subtype = CNTRL_ARM_REQ, .priv = (int *)ARMED_VALVES},
+    {.key = 'c', .subtype = CNTRL_ARM_REQ, .priv = (int *)ARMED_IGNITION},
+    {.key = 'v', .subtype = CNTRL_ARM_REQ, .priv = (int *)ARMED_DISCONNECTED},
+    {.key = 'b', .subtype = CNTRL_ARM_REQ, .priv = (int *)ARMED_LAUNCH},
+    {.key = 'n', .subtype = CNTRL_ARM_REQ, .priv = (int *)5},
+    {.key = 'm', .subtype = CNTRL_ARM_REQ, .priv = (int *)6},
+    {.key = ',', .subtype = CNTRL_ARM_REQ, .priv = (int *)7},
 };
 
 uint16_t port = 50001; /* Default port */
@@ -129,7 +138,7 @@ int main(int argc, char **argv) {
                     break;
                 case CNTRL_ARM_REQ:
                     uint8_t *level = commands[i].priv; // get arming level data
-                    arm_req_p arm_req = {.level = (intptr_t)level}; // create message
+                    arm_req_p arm_req = {.level = *level}; // create message
 
                     pad_send(&pad, &hdr, sizeof(hdr));
                     pad_send(&pad, &arm_req, sizeof(arm_req));
@@ -137,9 +146,7 @@ int main(int argc, char **argv) {
                 case CNTRL_ACT_ACK:
                 case CNTRL_ARM_ACK:
                     break;
-                }
-
-                break;
+                } break;
             }
 
             if (i == (sizeof(commands) / sizeof(commands[0]) - 1)) {
