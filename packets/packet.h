@@ -4,13 +4,15 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#define PACKED __attribute__ ((packed))
+
 /* PACKET HEADERS */
 
 /* Packet header */
 typedef struct {
     uint8_t type;    /* Message type */
     uint8_t subtype; /* Message sub-type */
-} header_p;
+} PACKED header_p;
 
 /* Valid packet types */
 typedef enum {
@@ -42,13 +44,13 @@ typedef enum {
 typedef struct {
     uint8_t id;    /* Numerical ID of the actuator */
     uint8_t state; /* State for the actuator to transition to */
-} act_req_p;
+} PACKED act_req_p;
 
 /* Actuation acknowledgement packet */
 typedef struct {
     uint8_t id;     /* Numerical ID of the actuator */
     uint8_t status; /* Status of actuation request */
-} act_ack_p;
+} PACKED act_ack_p;
 
 /* Actuation acknowledgement statuses */
 typedef enum {
@@ -56,12 +58,12 @@ typedef enum {
     ACT_DENIED = 1, /* The request was denied due to arming level being too low */
     ACT_DNE = 2,    /* The actuator ID is in the request was not associated with any actuator on the system */
     ACT_INV = 3,    /* The state requested was invalid */
-} act_ack_status_e;
+} PACKED act_ack_status_e;
 
 /* Arming request packet */
 typedef struct {
     uint8_t level; /* The new arming level requested */
-} arm_req_p;
+} PACKED arm_req_p;
 
 typedef enum {
     ARMED_PAD = 0,      /* The pad control box is armed */
@@ -75,7 +77,7 @@ typedef enum {
 /* Arming acknowledgement packet */
 typedef struct {
     uint8_t status; /* The status of the arming request just issued. */
-} arm_ack_p;
+} PACKED arm_ack_p;
 
 typedef enum {
     ARM_OK = 0, /* The arming level requested has been transitioned to. */
@@ -91,40 +93,40 @@ typedef struct {
     uint32_t time;       /* Time stamp in milliseconds since power on. */
     int32_t temperature; /* Temperature in millidegrees Celsius. */
     uint8_t id;          /* The ID of the sensor which reported the measurement. */
-} temp_p;
+} PACKED temp_p;
 
 /* Pressure measurement message */
 typedef struct {
     uint32_t time;     /* Time stamp in milliseconds since power on. */
     uint32_t pressure; /* Pressure in thousandths of a PSI. */
     uint8_t id;        /* The ID of the sensor which reported the measurement. */
-} pressure_p;
+} PACKED pressure_p;
 
 /* Mass measurement message */
 typedef struct {
     uint32_t time; /* Time stamp in milliseconds since power on. */
     uint32_t mass; /* Mass in grams. */
     uint8_t id;    /* The ID of the sensor which reported the measurement. */
-} mass_p;
+} PACKED mass_p;
 
 /* Arming state message */
 typedef struct {
     uint32_t time; /* Time stamp in milliseconds since power on. */
     uint8_t state; /* The current arming state. */
-} arm_state_p;
+} PACKED arm_state_p;
 
 /* Actuator state message */
 typedef struct {
     uint32_t time; /* Time stamp in milliseconds since power on. */
     uint8_t id;    /* The numerical ID of the actuator */
     uint8_t state; /* The current state of the actuator. */
-} act_state_p;
+} PACKED act_state_p;
 
 /* Warning message */
 typedef struct {
     uint32_t time; /* Time stamp in milliseconds since power on. */
     uint8_t type;  /* The type of warning. */
-} warn_p;
+} PACKED warn_p;
 
 /* Warning types */
 typedef enum {

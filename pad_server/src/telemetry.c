@@ -1,7 +1,9 @@
 #include <arpa/inet.h>
 #include <assert.h>
+#include <bits/types/struct_iovec.h>
 #include <errno.h>
 #include <pthread.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -81,6 +83,106 @@ static void telemetry_cleanup(void *arg) { telemetry_close((telemetry_sock_t *)(
 static void cancel_wrapper(void *arg) { pthread_cancel(*(pthread_t *)(arg)); }
 
 /*
+ * A function to publish pressure, tempereature, mass data.
+ * @param sock The telemetry socket on which to publish.
+ * @param type The telemetry type is being published.
+ * @param id The id of that data
+ * @param time Time of the data
+ * @param press_temp_mass The actual data being sent, could be pressure, temperatur or mass
+*/
+static void telemetry_publish_data(telemetry_sock_t *sock, telem_subtype_e type, uint8_t id, uint32_t time, uint32_t press_temp_mass) {
+    header_p hdr = {.type = TYPE_TELEM, .subtype = type};
+    pressure_p pressureBody = {.id = id, .time = time, .pressure = press_temp_mass};
+    temp_p temperatureBody = {.id = id, .time = time, .temperature = press_temp_mass};
+    mass_p massBody = {.id = id, .time = time, .mass = press_temp_mass};
+
+    struct iovec pkt[2] = {
+        {.iov_base = &hdr, .iov_len = sizeof(hdr)},
+    };
+    
+    /*Create the appropriate body base on type*/
+    struct iovec tmp;
+    switch (type) {
+        case TELEM_PRESSURE:{
+            tmp.iov_base = &pressureBody;
+            tmp.iov_len = sizeof(pressureBody);
+            pkt[1] = tmp;
+            break;
+        }
+        case TELEM_MASS:{
+            tmp.iov_base = &massBody;
+            tmp.iov_len = sizeof(massBody);
+            pkt[1] = tmp;
+            break; 
+        }
+        case TELEM_TEMP:{
+            tmp.iov_base = &temperatureBody;
+            tmp.iov_len = sizeof(temperatureBody);
+            pkt[1] = tmp;
+            break; 
+        }
+        default:
+            printf("Invalid type");
+            thread_return(0);
+    }
+    struct msghdr msg = {
+        .msg_name = NULL,
+        .msg_namelen = 0,
+        .msg_iov = pkt,
+        .msg_iovlen = (sizeof(pkt) / sizeof(struct iovec)),
+        .msg_control = NULL,
+        .msg_controllen = 0,
+        .msg_flags = 0,
+    };
+    telemetry_publish(sock, &msg);
+    usleep(1000);
+}
+
+/*
+ * A function to create random data if not put in any file to read from
+ * @params arg The arguent to run the telemetry thread
+*/
+static void random_data(telemetry_args_t *args){
+	/*Start telemetry socket */
+	telemetry_sock_t telem;
+	int err;
+    err = telemetry_init(&telem, args->port);
+    if (err) {
+        fprintf(stderr, "Could not start telemetry socket: %s\n", strerror(err));
+        thread_return(err);
+    }
+    pthread_cleanup_push(telemetry_cleanup, &telem);
+
+	uint32_t time = 0;
+	uint32_t pressure = 0;
+	uint32_t temperature = 0;
+    uint32_t mass = 4000;
+	/* Start transmitting telemetry to active clients */
+    for (;;) {	
+		pressure = (pressure + 1) % 255;
+		telemetry_publish_data(&telem, TELEM_PRESSURE, 1, time, 100 + pressure * 10);
+		telemetry_publish_data(&telem, TELEM_PRESSURE, 2, time, 200 + pressure * 20);
+		telemetry_publish_data(&telem, TELEM_PRESSURE, 3, time, 300 + pressure * 30);
+		telemetry_publish_data(&telem, TELEM_PRESSURE, 4, time, 250 + pressure * 40);
+
+		temperature = (temperature + 1) % 20 + 20;
+		telemetry_publish_data(&telem, TELEM_TEMP, 1, time, temperature - 1);
+		telemetry_publish_data(&telem, TELEM_TEMP, 2, time, temperature + 1);
+		telemetry_publish_data(&telem, TELEM_TEMP, 3, time, temperature - 2);
+		telemetry_publish_data(&telem, TELEM_TEMP, 4, time, temperature + 2);
+
+        mass = (mass + 10) % 4000 + 3900; 
+		telemetry_publish_data(&telem, TELEM_MASS, 1, time, temperature + 2);
+
+		time = (time + 1) % 1000000;
+        usleep(1000);
+    }
+
+    thread_return(0);
+    pthread_cleanup_pop(1);
+}
+
+/*
  * Run the thread responsible for transmitting telemetry data.
  * @param arg The arguments to the telemetry thread, of type `telemetry_args_t`.
  */
@@ -92,8 +194,8 @@ void *telemetry_run(void *arg) {
 
     /* Null telemetry file means nothing to do */
     if (args->data_file == NULL) {
-        printf("No telemetry data to send.\n");
-        thread_return(0);
+        // printf("No telemetry data to send.\n");
+        random_data(args);
     }
 
     /* Start telemetry socket */
@@ -132,14 +234,17 @@ void *telemetry_run(void *arg) {
         }
 
         /* TODO: parse all data */
+	
         char *rest = buffer;
-        char *time_str = strtok_r(buffer, ",", &rest);
+        char *time_str = strtok_r(rest, ",", &rest);
         uint32_t time = strtoul(time_str, NULL, 10);
-        char *pstr = strtok_r(buffer, ",", &rest);
+		char *mass_str = strtok_r(rest, ",", &rest);
+		uint32_t mass = strtoul(mass_str, NULL, 10);
+        char *pstr = strtok_r(rest, ",", &rest);
         uint32_t pressure = strtoul(pstr, NULL, 10);
 
         header_p hdr = {.type = TYPE_TELEM, .subtype = TELEM_PRESSURE};
-        pressure_p body = {.id = 0, .time = time, .pressure = pressure};
+        pressure_p body = {.id = 1, .time = time, .pressure = pressure};
 
         /* Send data to all clients. */
         struct iovec pkt[2] = {
