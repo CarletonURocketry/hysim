@@ -110,13 +110,14 @@ static ssize_t controller_recv(controller_t *controller, void *buf, size_t n) {
 void *controller_run(void *arg) {
     controller_args_t *args = (controller_args_t *)(arg);
     controller_t controller;
-    int err;
+    controller.sock = -1;
+    controller.client = -1;
 
     pthread_cleanup_push(controller_cleanup, &controller);
     fprintf(stderr, "Waiting for controller...\n");
 
     for (;;) {
-
+        int err;
         /* Initialize the controller (creates a new socket) */
         err = controller_init(&controller, args->port);
         if (err) {
