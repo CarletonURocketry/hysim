@@ -25,7 +25,6 @@ static int controller_init(controller_t *controller, uint16_t port) {
     if (controller->sock < 0) return errno;
 
     /* Create address */
-
     controller->addr.sin_family = AF_INET;
     controller->addr.sin_addr.s_addr = INADDR_ANY;
     controller->addr.sin_port = htons(port);
@@ -70,12 +69,19 @@ static int controller_accept(controller_t *controller) {
  */
 static int controller_disconnect(controller_t *controller) {
 
-    if (close(controller->client) < 0) {
-        return errno;
+    // only close the connection if it is valid
+    if (controller->client >= 0) {
+        if (close(controller->client) < 0) {
+            return errno;
+        }
+        controller->client = -1;
     }
 
-    if (close(controller->sock) < 0) {
-        return errno;
+    if (controller->sock >= 0) {
+        if (close(controller->sock) < 0) {
+            return errno;
+        }
+        controller->sock = -1;
     }
 
     return 0;
@@ -102,71 +108,84 @@ static ssize_t controller_recv(controller_t *controller, void *buf, size_t n) {
  * TODO: docs
  */
 void *controller_run(void *arg) {
-
     controller_args_t *args = (controller_args_t *)(arg);
     controller_t controller;
-    int err;
+    controller.sock = -1;
+    controller.client = -1;
 
-    /* Connect to the controller */
-    err = controller_init(&controller, args->port);
-    if (err) {
-        fprintf(stderr, "Could not initialize controller with error: %s\n", strerror(err));
-        thread_return(err);
-    }
     pthread_cleanup_push(controller_cleanup, &controller);
-
-    err = controller_accept(&controller);
-    if (err) {
-        fprintf(stderr, "Could not connect to controller with error: %s\n", strerror(err));
-        thread_return(err);
-    }
-    printf("Controller connected!\n");
-
-    /* Receive messages */
+    fprintf(stderr, "Waiting for controller...\n");
 
     for (;;) {
-
-        /* Get the message header to determine what to handle */
-        header_p hdr;
-        ssize_t bread;
-        bread = controller_recv(&controller, &hdr, sizeof(hdr));
-
-        if (bread == -1) {
-            fprintf(stderr, "Error reading message header: %s\n", strerror(errno));
-            thread_return(EXIT_FAILURE);
-        } else if (bread == 0) {
-            fprintf(stderr, "Control box disconnected.\n");
-            thread_return(EXIT_FAILURE);
+        int err;
+        /* Initialize the controller (creates a new socket) */
+        err = controller_init(&controller, args->port);
+        if (err) {
+            fprintf(stderr, "Could not initialize controller with error: %s\n", strerror(err));
+            continue;
         }
 
-        // TODO: handle recv errors
+        err = controller_accept(&controller);
+        if (err) {
+            fprintf(stderr, "Could not accept controller connection with error: %s\n", strerror(err));
+            controller_disconnect(&controller);
+            continue;
+        }
 
-        switch ((packet_type_e)hdr.type) {
-        case TYPE_CNTRL:
+        printf("Controller connected!\n");
 
-            switch ((cntrl_subtype_e)hdr.subtype) {
-            case CNTRL_ACT_ACK:
-            case CNTRL_ARM_ACK:
-                fprintf(stderr, "Unexpectedly received acknowledgement from sender.\n");
-                thread_return(EXIT_FAILURE);
-                break;
-            case CNTRL_ACT_REQ: {
-                act_req_p req;
-                controller_recv(&controller, &req, sizeof(req));
-                printf("Received actuator request for ID #%u and state %s.\n", req.id, req.state ? "on" : "off");
-            } break;
-            case CNTRL_ARM_REQ: {
-                arm_req_p req;
-                controller_recv(&controller, &req, sizeof(req));
-                printf("Received arming state %u.\n", req.level);
-            } break;
+        /* Receive messages */
+        for (;;) {
+            /* Get the message header to determine what to handle */
+            header_p hdr;
+            ssize_t bread = 0;
+            size_t total_read = 0;
+
+            while (total_read < sizeof(hdr)) {
+                bread = controller_recv(&controller, (char *)&hdr + total_read, sizeof(hdr) - total_read);
+                if (bread == -1) {
+                    fprintf(stderr, "Error reading message header: %s\n", strerror(errno));
+                    break;
+                } else if (bread == 0) {
+                    fprintf(stderr, "Control box disconnected.\n");
+                    break;
+                }
+                total_read += bread;
             }
 
-            break;
-        default:
-            fprintf(stderr, "Invalid message type: %u\n", hdr.type);
-            thread_return(EXIT_FAILURE);
-            break;
+            // Error happened, do a cleanup and re-initialize connection
+            if (bread <= 0) {
+                controller_disconnect(&controller);
+                break;
+            }
+
+            // TODO: handle recv errors
+
+            switch ((packet_type_e)hdr.type) {
+            case TYPE_CNTRL:
+
+                switch ((cntrl_subtype_e)hdr.subtype) {
+                case CNTRL_ACT_ACK:
+                case CNTRL_ARM_ACK:
+                    fprintf(stderr, "Unexpectedly received acknowledgement from sender.\n");
+                    break;
+                case CNTRL_ACT_REQ: {
+                    act_req_p req;
+                    controller_recv(&controller, &req, sizeof(req));
+                    printf("Received actuator request for ID #%u and state %s.\n", req.id, req.state ? "on" : "off");
+                } break;
+                case CNTRL_ARM_REQ: {
+                    arm_req_p req;
+                    controller_recv(&controller, &req, sizeof(req));
+                    printf("Received arming state %u.\n", req.level);
+                } break;
+                }
+
+                break;
+            default:
+                fprintf(stderr, "Invalid message type: %u\n", hdr.type);
+                break;
+            }
         }
     }
 
