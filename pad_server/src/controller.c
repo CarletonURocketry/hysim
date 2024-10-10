@@ -167,7 +167,6 @@ void *controller_run(void *arg) {
                 case CNTRL_ACT_ACK:
                 case CNTRL_ARM_ACK:
                     fprintf(stderr, "Unexpectedly received acknowledgement from sender.\n");
-                    thread_return(EXIT_FAILURE);
                     break;
                 case CNTRL_ACT_REQ: {
                     act_req_p req;
@@ -184,7 +183,6 @@ void *controller_run(void *arg) {
                 break;
             default:
                 fprintf(stderr, "Invalid message type: %u\n", hdr.type);
-                thread_return(EXIT_FAILURE);
                 break;
             }
         }
