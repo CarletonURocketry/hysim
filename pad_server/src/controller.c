@@ -69,12 +69,19 @@ static int controller_accept(controller_t *controller) {
  */
 static int controller_disconnect(controller_t *controller) {
 
-    if (close(controller->client) < 0) {
-        return errno;
+    // only close the connection if it is valid
+    if (controller->client >= 0) {
+        if (close(controller->client) < 0) {
+            return errno;
+        }
+        controller->client = -1;
     }
 
-    if (close(controller->sock) < 0) {
-        return errno;
+    if (controller->sock >= 0) {
+        if (close(controller->sock) < 0) {
+            return errno;
+        }
+        controller->sock = -1;
     }
 
     return 0;
@@ -105,26 +112,25 @@ void *controller_run(void *arg) {
     controller_t controller;
     int err;
 
+    pthread_cleanup_push(controller_cleanup, &controller);
     fprintf(stderr, "Waiting for controller...\n");
 
-    pthread_cleanup_push(controller_cleanup, &controller);
-
     for (;;) {
+
         /* Initialize the controller (creates a new socket) */
         err = controller_init(&controller, args->port);
         if (err) {
             fprintf(stderr, "Could not initialize controller with error: %s\n", strerror(err));
-            sleep(1);
             continue;
         }
 
         err = controller_accept(&controller);
         if (err) {
             fprintf(stderr, "Could not accept controller connection with error: %s\n", strerror(err));
-            controller_disconnect(&controller); // clean up
-            sleep(1);
+            controller_disconnect(&controller);
             continue;
         }
+
         printf("Controller connected!\n");
 
         /* Receive messages */
@@ -137,7 +143,6 @@ void *controller_run(void *arg) {
             while (total_read < sizeof(hdr)) {
                 bread = controller_recv(&controller, (char *)&hdr + total_read, sizeof(hdr) - total_read);
                 if (bread == -1) {
-                    if (errno == EINTR) continue; // Interrupted, try again
                     fprintf(stderr, "Error reading message header: %s\n", strerror(errno));
                     break;
                 } else if (bread == 0) {
@@ -147,7 +152,11 @@ void *controller_run(void *arg) {
                 total_read += bread;
             }
 
-            if (bread <= 0) break; // something that should not have happened happened, try reconnecting just in case
+            // Error happened, do a cleanup and re-initialize connection
+            if (bread <= 0) {
+                controller_disconnect(&controller);
+                break;
+            }
 
             // TODO: handle recv errors
 
@@ -179,10 +188,6 @@ void *controller_run(void *arg) {
                 break;
             }
         }
-
-        // Disconnect before attempting to reconnect
-        controller_disconnect(&controller);
-        sleep(1); // Wait before retrying
     }
 
     thread_return(0); // Normal return
