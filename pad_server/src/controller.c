@@ -24,13 +24,6 @@ static int controller_init(controller_t *controller, uint16_t port) {
     controller->sock = socket(AF_INET, SOCK_STREAM, 0);
     if (controller->sock < 0) return errno;
 
-    /* Set SO_REUSEADDR option */
-    int opt = 1;
-    if (setsockopt(controller->sock, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
-        close(controller->sock);
-        return errno;
-    }
-
     /* Create address */
     controller->addr.sin_family = AF_INET;
     controller->addr.sin_addr.s_addr = INADDR_ANY;
@@ -104,6 +97,9 @@ static ssize_t controller_recv(controller_t *controller, void *buf, size_t n) {
     return recv(controller->client, buf, n, 0);
 }
 
+/* Run the controller logic
+ * TODO: docs
+ */
 void *controller_run(void *arg) {
     controller_args_t *args = (controller_args_t *)(arg);
     controller_t controller;
