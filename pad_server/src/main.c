@@ -37,6 +37,7 @@ void int_handler(int sig) {
     if (err) {
         fprintf(stderr, "Telemetry could not be terminated with error: %s\n", strerror(err));
     }
+    pthread_join(telem_thread, NULL);
     printf("Telemetry thread terminated.\n");
 
     /* Wait for control thread to end */
@@ -44,6 +45,8 @@ void int_handler(int sig) {
     if (err) {
         fprintf(stderr, "Controller thread could not be terminated with error: %s\n", strerror(err));
     }
+    pthread_join(controller_thread, NULL);
+
     printf("Controller thread terminated.\n");
 
     exit(EXIT_SUCCESS);
