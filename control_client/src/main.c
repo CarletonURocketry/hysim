@@ -1,4 +1,5 @@
 #include <arpa/inet.h>
+#include <bits/types/struct_iovec.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -128,6 +129,9 @@ int main(int argc, char **argv) {
 
             if (commands[i].key == key) {
                 header_p hdr = {.type = TYPE_CNTRL, .subtype = commands[i].subtype}; // create header
+                struct iovec iov[2];
+                iov[0].iov_base = &hdr;
+                iov[0].iov_len = sizeof(hdr);
 
                 // check what type of command it is
                 switch (commands[i].subtype) {
@@ -136,8 +140,9 @@ int main(int argc, char **argv) {
                     actuator->state = !actuator->state;                                     // flip the state
                     act_req_p act_req = {.id = actuator->act_id, .state = actuator->state}; // Create message
 
-                    pad_send(&pad, &hdr, sizeof(hdr));
-                    pad_send(&pad, &act_req, sizeof(act_req));
+                    iov[1].iov_base = &act_req;
+                    iov[1].iov_len = sizeof(act_req);
+                    pad_send(&pad, iov);
 
                     act_ack_p act_ack;
                     err = recv(pad.sock, &act_ack, sizeof(act_ack), 0);
@@ -145,7 +150,7 @@ int main(int argc, char **argv) {
                     if (err == -1) {
                         fprintf(stderr, "Server did not aknowledge actuator request with id %d", actuator->act_id);
                     } else {
-                        fprintf(stderr, "Server acknowledged that actuator %d has status %d", act_ack.id,
+                        fprintf(stderr, "Server acknowledged actuator update %d with status %d", act_ack.id,
                                 act_ack.status);
                     }
 
@@ -154,15 +159,17 @@ int main(int argc, char **argv) {
                     uint8_t *level = commands[i].priv; // get arming level data
 
                     arm_req_p arm_req = {.level = (uint8_t)level}; // create message
-                    pad_send(&pad, &hdr, sizeof(hdr));
-                    pad_send(&pad, &act_req, sizeof(act_req));
+
+                    iov[1].iov_base = &arm_req;
+                    iov[1].iov_len = sizeof(arm_req);
+                    pad_send(&pad, iov);
 
                     arm_ack_p ack_arm;
                     recv(pad.sock, &ack_arm, sizeof(ack_arm), 0);
                     if (err == -1) {
                         fprintf(stderr, "Server did not aknowledge arming request with level %d", *level);
                     } else {
-                        fprintf(stderr, "Server acknowledged that it is armed with state %d", ack_arm.status);
+                        fprintf(stderr, "Server acknowledged arming request with status %d", ack_arm.status);
                     }
 
                     break;
