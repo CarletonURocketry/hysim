@@ -1,9 +1,11 @@
+#include <bits/types/struct_iovec.h>
 #include <errno.h>
 #include <semaphore.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <sys/types.h>
 #include <unistd.h>
 
 #include "../../packets/packet.h"
@@ -11,6 +13,7 @@
 
 /* Helper function for returning an error code from a thread */
 #define thread_return(e) pthread_exit((void *)(unsigned long)((e)))
+#define MAX_PACKET_SIZE 4 // Max size of header (2 byte) + payload (2 bytes)
 
 /*
  * Initializes the controller to be ready to create a TCP connection.
@@ -136,30 +139,25 @@ void *controller_run(void *arg) {
 
         /* Receive messages */
         for (;;) {
-            /* Get the message header to determine what to handle */
-            header_p hdr;
-            ssize_t bread = 0;
-            size_t total_read = 0;
+            uint8_t buffer[MAX_PACKET_SIZE];
+            struct msghdr msg = {0};
+            struct iovec iov[1];
+            iov[0].iov_base = buffer;
+            iov[0].iov_len = MAX_PACKET_SIZE;
+            msg.msg_iov = iov;
+            msg.msg_iovlen = 1;
 
-            while (total_read < sizeof(hdr)) {
-                bread = controller_recv(&controller, (char *)&hdr + total_read, sizeof(hdr) - total_read);
-                if (bread == -1) {
-                    fprintf(stderr, "Error reading message header: %s\n", strerror(errno));
-                    break;
-                } else if (bread == 0) {
-                    fprintf(stderr, "Control box disconnected.\n");
-                    break;
-                }
-                total_read += bread;
-            }
-
-            // Error reading header, listen for next message
-            if (bread == -1) {
+            ssize_t total_read = recvmsg(controller.client, &msg, 0);
+            if (total_read == -1) {
+                fprintf(stderr, "Error reading message header: %s\n", strerror(errno));
                 continue;
-            } else if (bread == 0) {
+            } else if (total_read == 0) {
+                fprintf(stderr, "Control box disconnected.\n");
                 controller_disconnect(&controller);
                 break;
             }
+
+            header_p hdr = {.type = buffer[0], .subtype = buffer[1]};
 
             switch ((packet_type_e)hdr.type) {
             case TYPE_CNTRL:
@@ -170,8 +168,7 @@ void *controller_run(void *arg) {
                     fprintf(stderr, "Unexpectedly received acknowledgement from sender.\n");
                     break;
                 case CNTRL_ACT_REQ: {
-                    act_req_p req;
-                    controller_recv(&controller, &req, sizeof(req));
+                    act_req_p req = {.id = buffer[2], .state = buffer[3]};
                     printf("Received actuator request for ID #%u and state %s.\n", req.id, req.state ? "on" : "off");
 
                     // save the actuator state
@@ -181,11 +178,10 @@ void *controller_run(void *arg) {
 
                 } break;
                 case CNTRL_ARM_REQ: {
-                    arm_req_p req;
-                    controller_recv(&controller, &req, sizeof(req));
+                    arm_req_p req = {.level = buffer[2]};
                     printf("Received arming state %u.\n", req.level);
 
-                    // save the arming sate
+                    // save the arming state
 
                     arm_ack_p ack = {.status = ARM_OK};
                     send(controller.client, &ack, sizeof(ack), 0);

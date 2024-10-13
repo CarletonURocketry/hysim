@@ -1,8 +1,8 @@
-#include "../../packets/packet.h"
 #include <arpa/inet.h>
 #include <errno.h>
 #include <netinet/in.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
@@ -74,11 +74,15 @@ int pad_connect_forever(pad_t *pad) {
 /*
  * Send a message to the control port of the pad server.
  * @param pad The pad server to send a message to.
- * @param buf The buffer containing `n` bytes of message to be sent.
- * @param n The number of bytes in `buf` to be sent.
+ * @param iov 2 iovec structs, one for the header and one for the payload.
  * @return The number of bytes that were sent, or -1 on failure (errno indicates the error).
  */
-ssize_t pad_send(pad_t *pad, const void *buf, size_t n) { return send(pad->sock, buf, n, 0); }
+ssize_t pad_send(pad_t *pad, struct iovec iov[2]) {
+    struct msghdr msg = {0};
+    msg.msg_iov = iov;
+    msg.msg_iovlen = 2;
+    return sendmsg(pad->sock, &msg, 0);
+}
 
 /*
  * Close the connection to the pad server.
