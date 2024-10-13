@@ -14,16 +14,17 @@
 typedef struct {
     bool actuators[NUM_ACTUATORS];
     arm_lvl_e arm_level;
-    
+
     pthread_mutex_t r_mutex, w_mutex;
 
-    sem_t read_try, resource; 
+    sem_t read_try, resource;
 
     int read_count, write_count;
 
 } padstate_t;
 
 void padstate_init(padstate_t *state);
+int padstate_get_level(padstate_t *state, arm_lvl_e *arm_val);
 int padstate_change_level(padstate_t *state, arm_lvl_e new_arm);
 int padstate_actuate(padstate_t *state, uint8_t id, bool new_state);
 

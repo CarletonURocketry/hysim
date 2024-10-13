@@ -107,7 +107,6 @@ int main(int argc, char **argv) {
     }
 
     /* Set up the state to be shared */
-    padstate_t state;
     padstate_init(&state);
 
     int err;
