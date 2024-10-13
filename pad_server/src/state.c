@@ -1,19 +1,16 @@
-#include "state.h"
 #include <errno.h>
 #include <pthread.h>
 #include <semaphore.h>
 #include <stdio.h>
 
+#include "state.h"
+
 /* TODO: docs */
 void padstate_init(padstate_t *state) {
-    pthread_mutex_init(&state->r_mutex, NULL);
-    pthread_mutex_init(&state->w_mutex, NULL);
-
-    sem_init(&state->read_try, 0, 1);
-    sem_init(&state->resource, 0, 1);
-
-    state->write_count = 0;
-    state->read_count = 0;
+    pthread_rwlockattr_setkind_np(
+        &state->rw_lock_attr, PTHREAD_RWLOCK_PREFER_WRITER_NONRECURSIVE_NP); // Linux only, change if we deploy to
+                                                                             // nuttx, default for nuttx is writers pref
+    pthread_rwlock_init(&state->rw_lock, &state->rw_lock_attr);
 
     // TODO: Is this right? Can we assume if the program is running then the pad is armed?
     state->arm_level = ARMED_PAD;
@@ -22,45 +19,18 @@ void padstate_init(padstate_t *state) {
     }
 }
 
-// based on https://en.wikipedia.org/wiki/Readers%E2%80%93writers_problem#Second_readers%E2%80%93writers_problem
 //
 /* TODO: docs
  *
  */
 int padstate_get_level(padstate_t *state, arm_lvl_e *arm_val) {
     int err;
-    // wait until we can read, this can be set by writers
-    err = sem_wait(&state->read_try);
-    if (err) return errno;
-    // lock for read_count race condition
-    err = pthread_mutex_lock(&state->r_mutex);
+    err = pthread_rwlock_rdlock(&state->rw_lock);
     if (err) return err;
-
-    state->read_count++;
-
-    if (state->read_count == 1) {
-        err = sem_wait(&state->resource); // don't let writers modify the resource
-    }
-
-    err = pthread_mutex_unlock(&state->r_mutex);
-    if (err) return err;
-
-    // allow other readers to do their actions; doesn't change anything for us since we're just reading
-    err = sem_post(&state->read_try);
 
     *arm_val = state->arm_level;
 
-    // lock for read_count race condition
-    err = pthread_mutex_lock(&state->r_mutex);
-    if (err) return err;
-
-    state->read_count--;
-
-    if (state->read_count == 0) {
-        err = sem_post(&state->resource); // let writers modify the resource
-    }
-
-    err = pthread_mutex_unlock(&state->r_mutex);
+    err = pthread_rwlock_unlock(&state->rw_lock);
     if (err) return err;
 
     return 0;
@@ -71,41 +41,12 @@ int padstate_get_level(padstate_t *state, arm_lvl_e *arm_val) {
  */
 int padstate_change_level(padstate_t *state, arm_lvl_e new_arm) {
     int err;
-    err = pthread_mutex_lock(&state->w_mutex);
-    if (err) return err;
-
-    state->write_count++;
-
-    // we're the first writer
-    if (state->write_count == 1) {
-        // stop readers in queue from reading
-        err = sem_wait(&state->read_try);
-        if (err) return err;
-    }
-    // let other writers join queue
-    err = pthread_mutex_unlock(&state->w_mutex);
-    if (err) return err;
-
-    // stop other writers from writing at the same time
-    err = sem_wait(&state->resource);
+    err = pthread_rwlock_wrlock(&state->rw_lock);
     if (err) return err;
 
     state->arm_level = new_arm;
 
-    err = sem_post(&state->resource);
-    if (err) return err;
-
-    // lock write_count
-    err = pthread_mutex_lock(&state->w_mutex);
-    if (err) return err;
-
-    state->write_count--;
-    // we were the last writer, let the readers start reading
-    if (state->write_count == 0) {
-        err = sem_post(&state->read_try);
-        if (err) return err;
-    }
-    err = pthread_mutex_unlock(&state->w_mutex);
+    err = pthread_rwlock_unlock(&state->rw_lock);
     if (err) return err;
 
     return 0;
@@ -115,43 +56,12 @@ int padstate_change_level(padstate_t *state, arm_lvl_e new_arm) {
  */
 int padstate_actuate(padstate_t *state, uint8_t id, bool new_state) {
     int err;
-    err = pthread_mutex_lock(&state->w_mutex);
-    if (err) return err;
-
-    state->write_count++;
-
-    // we're the first writer
-    if (state->write_count == 1) {
-        // stop readers from reading
-        err = sem_wait(&state->read_try);
-        if (err) return err;
-    }
-    // let other writers join queue
-    err = pthread_mutex_unlock(&state->w_mutex);
-    if (err) return err;
-
-    // stop other writers from writing at the same time
-    err = sem_wait(&state->resource);
+    err = pthread_rwlock_wrlock(&state->rw_lock);
     if (err) return err;
 
     state->actuators[id] = new_state;
 
-    err = sem_post(&state->resource);
-    if (err) return err;
-
-    // lock write_count
-    err = pthread_mutex_lock(&state->w_mutex);
-    if (err) return err;
-
-    state->write_count--;
-    // we were the last writer, let the readers start reading
-    if (state->write_count == 0) {
-        err = sem_post(&state->read_try);
-        if (err) return err;
-    }
-
-    err = pthread_mutex_unlock(&state->w_mutex);
-    if (err) return err;
+    err = pthread_rwlock_unlock(&state->rw_lock);
 
     return 0;
 }

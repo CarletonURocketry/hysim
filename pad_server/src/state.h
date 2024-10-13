@@ -15,9 +15,8 @@ typedef struct {
     bool actuators[NUM_ACTUATORS];
     arm_lvl_e arm_level;
 
-    pthread_mutex_t r_mutex, w_mutex;
-
-    sem_t read_try, resource;
+    pthread_rwlock_t rw_lock;
+    pthread_rwlockattr_t rw_lock_attr;
 
     int read_count, write_count;
 

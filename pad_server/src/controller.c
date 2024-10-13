@@ -197,10 +197,9 @@ void *controller_run(void *arg) {
                         fprintf(stderr, "Could not change arming level with error: %s\n", strerror(errno));
                         break;
                     case ARM_DENIED:
-                        fprintf(stderr, "Could not change arming level with error: Arm level denied");
-                        break;
                     case ARM_INV:
-                        fprintf(stderr, "Could not change arming level with error: Invalid arm level");
+                        fprintf(stderr, "Could not change arming level with error: %d\n",
+                                err); // 1 -> DENIED, 2-> INVALID
                         break;
                     }
                     break;
