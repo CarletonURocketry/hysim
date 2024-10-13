@@ -185,13 +185,25 @@ void *controller_run(void *arg) {
                     }
                     */
                 } break;
-                case CNTRL_ARM_REQ: {
+                case CNTRL_ARM_REQ:
                     arm_req_p req;
                     controller_recv(&controller, &req, sizeof(req));
                     printf("Received arming state %u.\n", req.level);
+
                     err = change_arm_level(args->state, req.level, CNTRL_ARM_REQ);
-                    if (err) fprintf(stderr, "Could not change arm level with error: %d\n", err); // 1 = ARM_DENIED 2 = ARM_INVALID
-                } break;
+
+                    switch (err) {
+                    case -1:
+                        fprintf(stderr, "Could not change arming level with error: %s\n", strerror(errno));
+                        break;
+                    case ARM_DENIED:
+                        fprintf(stderr, "Could not change arming level with error: Arm level denied");
+                        break;
+                    case ARM_INV:
+                        fprintf(stderr, "Could not change arming level with error: Invalid arm level");
+                        break;
+                    }
+                    break;
                 }
 
                 break;

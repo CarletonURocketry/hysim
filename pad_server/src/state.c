@@ -23,7 +23,7 @@ void padstate_init(padstate_t *state) {
 }
 
 // based on https://en.wikipedia.org/wiki/Readers%E2%80%93writers_problem#Second_readers%E2%80%93writers_problem
-// 
+//
 /* TODO: docs
  *
  */

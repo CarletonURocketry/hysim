@@ -1,3 +1,4 @@
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -10,7 +11,8 @@
  * @param state The current state of the pad server.
  * @param new_arm The new arming level to attempt to change to.
  * @param cmd_src The source of the command, as a cntrl_subtype_e.
- * @return ARM_OK for success, ARM_INV or ARM_DENIED otherwise.
+ * @return ARM_OK for success, ARM_INV or ARM_DENIED for invalid or out of order arming state, and -1 on error, setting
+ * ERRNO.
  */
 int change_arm_level(padstate_t *state, arm_lvl_e new_arm, cntrl_subtype_e cmd_src) {
     if (new_arm > ARMED_LAUNCH || new_arm < ARMED_PAD) {
@@ -23,16 +25,16 @@ int change_arm_level(padstate_t *state, arm_lvl_e new_arm, cntrl_subtype_e cmd_s
     arm_lvl_e current_state;
     err = padstate_get_level(state, &current_state);
     if (err) {
-        fprintf(stderr, "Could not get arm level with error: %s\n", strerror(err));
-        return ARM_INV; // change to return something different, unsure what
+        errno = err;
+        return -1;
     }
 
     if ((current_state + 1 == new_arm && new_arm >= ARMED_DISCONNECTED && cmd_src == CNTRL_ACT_REQ) ||
         (current_state + 1 == new_arm && new_arm < ARMED_DISCONNECTED && cmd_src == CNTRL_ARM_REQ)) {
         err = padstate_change_level(state, new_arm);
         if (err) {
-            fprintf(stderr, "Could not change arm level with error: %s\n", strerror(err));
-            return ARM_INV; // same as before, we need an error code for this
+            errno = err;
+            return -1;
         }
     } else {
         return ARM_DENIED;
