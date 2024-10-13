@@ -72,10 +72,6 @@ void packet_warn_init(warn_p *p, uint32_t time, warn_type_e type) {
     p->type = (uint8_t)type;
 }
 
-const char *arm_state_str(arm_lvl_e state) {
-    return ARMING_STR[state];
-}
+const char *arm_state_str(arm_lvl_e state) { return ARMING_STR[state]; }
 
-const char *warning_str(warn_type_e warning) {
-    return WARNING_STR[warning];
-}
+const char *warning_str(warn_type_e warning) { return WARNING_STR[warning]; }

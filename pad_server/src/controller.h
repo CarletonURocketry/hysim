@@ -3,6 +3,7 @@
 
 #include <netinet/in.h>
 #include <sys/socket.h>
+
 #include "state.h"
 
 /* The maximum number of controllers allowed to connect to the pad control system. */
