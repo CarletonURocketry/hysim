@@ -153,13 +153,13 @@ void *controller_run(void *arg) {
                 total_read += bread;
             }
 
-            // Error happened, do a cleanup and re-initialize connection
-            if (bread <= 0) {
+            // Error reading header, listen for next message
+            if (bread == -1) {
+                continue;
+            } else if (bread == 0) {
                 controller_disconnect(&controller);
                 break;
             }
-
-            // TODO: handle recv errors
 
             switch ((packet_type_e)hdr.type) {
             case TYPE_CNTRL:
@@ -173,14 +173,25 @@ void *controller_run(void *arg) {
                     act_req_p req;
                     controller_recv(&controller, &req, sizeof(req));
                     printf("Received actuator request for ID #%u and state %s.\n", req.id, req.state ? "on" : "off");
+
+                    // save the actuator state
+
+                    act_ack_p ack = {.id = req.id, .status = ACT_OK};
+                    send(controller.client, &ack, sizeof(ack), 0);
+
                 } break;
                 case CNTRL_ARM_REQ: {
                     arm_req_p req;
                     controller_recv(&controller, &req, sizeof(req));
                     printf("Received arming state %u.\n", req.level);
+
+                    // save the arming sate
+
+                    arm_ack_p ack = {.status = ARM_OK};
+                    send(controller.client, &ack, sizeof(ack), 0);
+
                 } break;
                 }
-
                 break;
             default:
                 fprintf(stderr, "Invalid message type: %u\n", hdr.type);

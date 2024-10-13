@@ -1,3 +1,4 @@
+#include "../../packets/packet.h"
 #include <arpa/inet.h>
 #include <errno.h>
 #include <netinet/in.h>
@@ -6,6 +7,7 @@
 #include <unistd.h>
 
 #include "pad.h"
+#define RCVTIMEO_SEC 3;
 
 /*
  * Initialize a pad structure.
@@ -21,6 +23,11 @@ int pad_init(pad_t *pad, const char *ip, uint16_t port) {
     if (pad->sock < 0) {
         return errno;
     }
+
+    struct timeval tv;
+    tv.tv_sec = RCVTIMEO_SEC;
+    tv.tv_usec = 0;
+    setsockopt(pad->sock, SOL_SOCKET, SO_RCVTIMEO, (const char *)&tv, sizeof tv);
 
     /* Create address */
     pad->addr.sin_family = AF_INET;
