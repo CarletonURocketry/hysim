@@ -190,7 +190,7 @@ void *controller_run(void *arg) {
                     controller_recv(&controller, &req, sizeof(req));
                     printf("Received arming state %u.\n", req.level);
                     err = change_arm_level(args->state, req.level, CNTRL_ARM_REQ);
-                    if (err) fprintf(stderr, "Could not change arm level %d\n", err);
+                    if (err) fprintf(stderr, "Could not change arm level with error: %d\n", err); // 1 = ARM_DENIED 2 = ARM_INVALID
                 } break;
                 }
 

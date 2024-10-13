@@ -23,14 +23,17 @@ int change_arm_level(padstate_t *state, arm_lvl_e new_arm, cntrl_subtype_e cmd_s
     arm_lvl_e current_state;
     err = padstate_get_level(state, &current_state);
     if (err) {
-        fprintf(stderr, "Could not get pad state with error %s\n", strerror(err));
+        fprintf(stderr, "Could not get arm level with error: %s\n", strerror(err));
         return ARM_INV; // change to return something different, unsure what
     }
 
-    if (current_state + 1 == new_arm && new_arm >= ARMED_DISCONNECTED && cmd_src == CNTRL_ACT_REQ) {
-        padstate_change_level(state, new_arm);
-    } else if (current_state + 1 == new_arm && new_arm < ARMED_DISCONNECTED && cmd_src == CNTRL_ARM_REQ) {
-        padstate_change_level(state, new_arm);
+    if ((current_state + 1 == new_arm && new_arm >= ARMED_DISCONNECTED && cmd_src == CNTRL_ACT_REQ) ||
+        (current_state + 1 == new_arm && new_arm < ARMED_DISCONNECTED && cmd_src == CNTRL_ARM_REQ)) {
+        err = padstate_change_level(state, new_arm);
+        if (err) {
+            fprintf(stderr, "Could not change arm level with error: %s\n", strerror(err));
+            return ARM_INV; // same as before, we need an error code for this
+        }
     } else {
         return ARM_DENIED;
     }

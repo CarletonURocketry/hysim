@@ -23,11 +23,11 @@ void padstate_init(padstate_t *state) {
 }
 
 // based on https://en.wikipedia.org/wiki/Readers%E2%80%93writers_problem#Second_readers%E2%80%93writers_problem
-
+// 
 /* TODO: docs
  *
  */
-int padstate_get_level(padstate_t *state, arm_lvl_e *arm_val) { // is using a pointer to a variable good practice?
+int padstate_get_level(padstate_t *state, arm_lvl_e *arm_val) {
     int err;
     // wait until we can read, this can be set by writers
     err = sem_wait(&state->read_try);
