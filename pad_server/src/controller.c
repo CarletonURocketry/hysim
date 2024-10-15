@@ -13,6 +13,7 @@
 /* Helper function for returning an error code from a thread */
 #define thread_return(e) pthread_exit((void *)(unsigned long)((e)))
 #define MAX_BUFFER_SIZE 2
+#define RECV_BUFFER_FLUSH_SIZE 32
 
 /*
  * Initializes the controller to be ready to create a TCP connection.
@@ -127,8 +128,8 @@ static ssize_t controller_send(controller_t *controller, void *buf, size_t n) {
     return send(controller->client, buf, n, 0);
 }
 
-static int flush_recv(controller_t *controller) {
-    char buf[1024];
+static ssize_t flush_recv(controller_t *controller) {
+    char buf[RECV_BUFFER_FLUSH_SIZE];
     return recv(controller->client, buf, sizeof(buf), 0);
 }
 
@@ -209,6 +210,10 @@ void *controller_run(void *arg) {
                     controller_send(&controller, &ack, sizeof(ack));
 
                 } break;
+                default:
+                    fprintf(stderr, "Invalid message subtype: %u\n", hdr.subtype);
+                    flush_recv(&controller);
+                    break;
                 }
                 break;
             default:
