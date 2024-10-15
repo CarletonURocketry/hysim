@@ -85,6 +85,15 @@ ssize_t pad_send(pad_t *pad, struct iovec iov[2]) {
 }
 
 /*
+ * Receive a message from the pad server.
+ * @param pad The pad server to send a message to.
+ * @param buf The destination buffer.
+ * @param n The size of the destination buffer.
+ * @return The number of bytes that were received, or -1 on failure (errno indicates the error).
+ */
+ssize_t pad_receive(pad_t *pad, void *buf, ssize_t n) { return recv(pad->sock, buf, n, 0); }
+
+/*
  * Close the connection to the pad server.
  * @param pad The pad server to close the connection to.
  * @return 0 on success, the error that occurred on failure.

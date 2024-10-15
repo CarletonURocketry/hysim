@@ -1,10 +1,10 @@
 #include <arpa/inet.h>
-#include <bits/types/struct_iovec.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <sys/uio.h>
 #include <unistd.h>
 
 #include "../../packets/packet.h"
@@ -145,7 +145,7 @@ int main(int argc, char **argv) {
                     pad_send(&pad, iov);
 
                     act_ack_p act_ack;
-                    err = recv(pad.sock, &act_ack, sizeof(act_ack), 0);
+                    err = pad_receive(&pad, &act_ack, sizeof(act_ack));
 
                     if (err == -1) {
                         fprintf(stderr, "Server did not aknowledge actuator request with id %d", actuator->act_id);
@@ -164,12 +164,12 @@ int main(int argc, char **argv) {
                     iov[1].iov_len = sizeof(arm_req);
                     pad_send(&pad, iov);
 
-                    arm_ack_p ack_arm;
-                    recv(pad.sock, &ack_arm, sizeof(ack_arm), 0);
+                    arm_ack_p arm_ack;
+                    err = pad_receive(&pad, &arm_ack, sizeof(arm_ack));
                     if (err == -1) {
                         fprintf(stderr, "Server did not aknowledge arming request with level %d", *level);
                     } else {
-                        fprintf(stderr, "Server acknowledged arming request with status %d", ack_arm.status);
+                        fprintf(stderr, "Server acknowledged arming request with status %d", arm_ack.status);
                     }
 
                     break;

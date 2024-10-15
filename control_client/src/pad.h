@@ -1,10 +1,10 @@
 #ifndef _PAD_H_
 #define _PAD_H_
 
-#include <bits/types/struct_iovec.h>
 #include <netinet/in.h>
 #include <stdint.h>
 #include <sys/socket.h>
+#include <sys/uio.h>
 
 /* Represents the pad control system server */
 typedef struct {
@@ -17,5 +17,5 @@ int pad_connect(pad_t *pad);
 int pad_connect_forever(pad_t *pad);
 int pad_disconnect(pad_t *pad);
 ssize_t pad_send(pad_t *pad, struct iovec iov[2]);
-
+ssize_t pad_receive(pad_t *pad, void *buf, ssize_t n);
 #endif // _PAD_H_
