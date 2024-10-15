@@ -1,9 +1,10 @@
 #include <errno.h>
 #include <semaphore.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <sys/types.h>
+#include <sys/uio.h>
 #include <unistd.h>
 
 #include "../../packets/packet.h"
@@ -11,6 +12,8 @@
 
 /* Helper function for returning an error code from a thread */
 #define thread_return(e) pthread_exit((void *)(unsigned long)((e)))
+#define MAX_BUFFER_SIZE 2
+#define RECV_BUFFER_FLUSH_SIZE 32
 
 /*
  * Initializes the controller to be ready to create a TCP connection.
@@ -100,8 +103,34 @@ static void controller_cleanup(void *arg) { controller_disconnect((controller_t 
  * @param n The number of bytes to receive. Must be less than or equal to the length of `buf`.
  * @return The number of bytes read. 0 indicates no more bytes, -1 indicates an error and `errno` will be set.
  */
-static ssize_t controller_recv(controller_t *controller, void *buf, size_t n) {
-    return recv(controller->client, buf, n, 0);
+static ssize_t controller_receive(controller_t *controller, void *buf, size_t n) {
+    ssize_t bread = 0;
+    size_t total_read = 0;
+
+    while (total_read < n) {
+        bread = recv(controller->client, (char *)buf + total_read, n - total_read, 0);
+        if (bread <= 0) {
+            return bread;
+        }
+        total_read += bread;
+    }
+    return total_read;
+}
+
+/*
+ * Send buf to controller client
+ * @param controller The controller to send to.
+ * @param buf The buffer with the payload.
+ * @param n The size of buf
+ * @return The number of bytes written. -1 indicates an error.
+ */
+static ssize_t controller_send(controller_t *controller, void *buf, size_t n) {
+    return send(controller->client, buf, n, 0);
+}
+
+static ssize_t flush_recv(controller_t *controller) {
+    char buf[RECV_BUFFER_FLUSH_SIZE];
+    return recv(controller->client, buf, sizeof(buf), 0);
 }
 
 /* Run the controller logic
@@ -138,28 +167,17 @@ void *controller_run(void *arg) {
         for (;;) {
             /* Get the message header to determine what to handle */
             header_p hdr;
-            ssize_t bread = 0;
-            size_t total_read = 0;
 
-            while (total_read < sizeof(hdr)) {
-                bread = controller_recv(&controller, (char *)&hdr + total_read, sizeof(hdr) - total_read);
-                if (bread == -1) {
-                    fprintf(stderr, "Error reading message header: %s\n", strerror(errno));
-                    break;
-                } else if (bread == 0) {
-                    fprintf(stderr, "Control box disconnected.\n");
-                    break;
-                }
-                total_read += bread;
-            }
-
-            // Error happened, do a cleanup and re-initialize connection
-            if (bread <= 0) {
+            err = controller_receive(&controller, &hdr, sizeof(hdr));
+            if (err == -1) {
+                flush_recv(&controller);
+                fprintf(stderr, "Error reading message header: %s\n", strerror(errno));
+                continue;
+            } else if (err == 0) {
+                fprintf(stderr, "Control box disconnected.\n");
                 controller_disconnect(&controller);
                 break;
             }
-
-            // TODO: handle recv errors
 
             switch ((packet_type_e)hdr.type) {
             case TYPE_CNTRL:
@@ -168,22 +186,39 @@ void *controller_run(void *arg) {
                 case CNTRL_ACT_ACK:
                 case CNTRL_ARM_ACK:
                     fprintf(stderr, "Unexpectedly received acknowledgement from sender.\n");
+                    flush_recv(&controller);
                     break;
                 case CNTRL_ACT_REQ: {
-                    act_req_p req;
-                    controller_recv(&controller, &req, sizeof(req));
-                    printf("Received actuator request for ID #%u and state %s.\n", req.id, req.state ? "on" : "off");
+                    act_req_p act_req;
+                    err = controller_receive(&controller, &act_req, sizeof(act_req));
+                    printf("Received actuator request for ID #%u and state %s.\n", act_req.id,
+                           act_req.state ? "on" : "off");
+
+                    // save the actuator state
+
+                    act_ack_p ack = {.id = act_req.id, .status = ACT_OK};
+                    controller_send(&controller, &ack, sizeof(ack));
                 } break;
                 case CNTRL_ARM_REQ: {
-                    arm_req_p req;
-                    controller_recv(&controller, &req, sizeof(req));
-                    printf("Received arming state %u.\n", req.level);
-                } break;
-                }
+                    arm_req_p arm_req;
+                    controller_receive(&controller, &arm_req, sizeof(arm_req));
+                    printf("Received arming state %u.\n", arm_req.level);
 
+                    // save the arming state
+
+                    arm_ack_p ack = {.status = ARM_OK};
+                    controller_send(&controller, &ack, sizeof(ack));
+
+                } break;
+                default:
+                    fprintf(stderr, "Invalid message subtype: %u\n", hdr.subtype);
+                    flush_recv(&controller);
+                    break;
+                }
                 break;
             default:
                 fprintf(stderr, "Invalid message type: %u\n", hdr.type);
+                flush_recv(&controller);
                 break;
             }
         }
