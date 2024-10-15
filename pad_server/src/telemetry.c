@@ -1,6 +1,6 @@
 #include <arpa/inet.h>
 #include <assert.h>
-#include <bits/types/struct_iovec.h>
+#include <sys/uio.h>
 #include <errno.h>
 #include <pthread.h>
 #include <stdint.h>

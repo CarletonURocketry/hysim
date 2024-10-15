@@ -7,9 +7,9 @@
 #include <unistd.h>
 
 #include "../../packets/packet.h"
+#include "../../pad_server/src/actuator.h"
 #include "helptext.h"
 #include "pad.h"
-#include "../../pad_server/src/actuator.h"
 
 typedef struct {
     uint8_t act_id;
@@ -27,11 +27,14 @@ typedef struct {
 } command_t;
 
 static switch_t switches[] = {
-    {.act_id = ID_FIRE_VALVE, .state = false}, {.act_id = ID_XV1, .state = false}, {.act_id = ID_XV2, .state = false},
-    {.act_id = ID_XV3, .state = false}, {.act_id = ID_XV4, .state = false}, {.act_id = ID_XV5, .state = false},
-    {.act_id = ID_XV6, .state = false}, {.act_id = ID_XV7, .state = false}, {.act_id = ID_XV8, .state = false},
-    {.act_id = ID_XV9, .state = false}, {.act_id = ID_XV10, .state = false}, {.act_id = ID_XV11, .state = false},
-    {.act_id = ID_XV12, .state = false}, {.act_id = ID_QUICK_DISCONNECT, .state = false}, {.act_id = ID_IGNITER, .state = false},
+    {.act_id = ID_FIRE_VALVE, .state = false}, {.act_id = ID_XV1, .state = false},
+    {.act_id = ID_XV2, .state = false},        {.act_id = ID_XV3, .state = false},
+    {.act_id = ID_XV4, .state = false},        {.act_id = ID_XV5, .state = false},
+    {.act_id = ID_XV6, .state = false},        {.act_id = ID_XV7, .state = false},
+    {.act_id = ID_XV8, .state = false},        {.act_id = ID_XV9, .state = false},
+    {.act_id = ID_XV10, .state = false},       {.act_id = ID_XV11, .state = false},
+    {.act_id = ID_XV12, .state = false},       {.act_id = ID_QUICK_DISCONNECT, .state = false},
+    {.act_id = ID_IGNITER, .state = false},
 };
 
 static command_t commands[] = {
@@ -50,7 +53,7 @@ static command_t commands[] = {
     {.key = 'f', .subtype = CNTRL_ACT_REQ, .priv = &switches[12]},
     {.key = 'g', .subtype = CNTRL_ACT_REQ, .priv = &switches[13]},
     {.key = 'h', .subtype = CNTRL_ACT_REQ, .priv = &switches[14]},
-    
+
     {.key = 'z', .subtype = CNTRL_ARM_REQ, .priv = (int *)ARMED_PAD},
     {.key = 'x', .subtype = CNTRL_ARM_REQ, .priv = (int *)ARMED_VALVES},
     {.key = 'c', .subtype = CNTRL_ARM_REQ, .priv = (int *)ARMED_IGNITION},
@@ -122,30 +125,33 @@ int main(int argc, char **argv) {
         }
 
         for (unsigned int i = 0; i < sizeof(commands) / sizeof(commands[0]); i++) {
-            
+
             if (commands[i].key == key) {
                 header_p hdr = {.type = TYPE_CNTRL, .subtype = commands[i].subtype}; // create header
 
                 // check what type of command it is
                 switch (commands[i].subtype) {
-                case CNTRL_ACT_REQ:
-                    switch_t *actuator = commands[i].priv; // get the actuator data
-                    actuator->state = !actuator->state;    // flip the state
+                case CNTRL_ACT_REQ: {
+                    switch_t *actuator = commands[i].priv;                                  // get the actuator data
+                    actuator->state = !actuator->state;                                     // flip the state
                     act_req_p act_req = {.id = actuator->act_id, .state = actuator->state}; // Create message
 
                     pad_send(&pad, &hdr, sizeof(hdr));
                     pad_send(&pad, &act_req, sizeof(act_req));
                     break;
-                case CNTRL_ARM_REQ:
-                    uint8_t *level = commands[i].priv; // get arming level data
-                    arm_req_p arm_req = {.level = (uint8_t) level}; // create message
+                }
+                case CNTRL_ARM_REQ: {
+                    uint8_t *level = commands[i].priv;             // get arming level data
+                    arm_req_p arm_req = {.level = (uint8_t)level}; // create message
                     pad_send(&pad, &hdr, sizeof(hdr));
                     pad_send(&pad, &arm_req, sizeof(arm_req));
                     break;
+                }
                 case CNTRL_ACT_ACK:
                 case CNTRL_ARM_ACK:
                     break;
-                } break;
+                }
+                break;
             }
 
             if (i == (sizeof(commands) / sizeof(commands[0]) - 1)) {
