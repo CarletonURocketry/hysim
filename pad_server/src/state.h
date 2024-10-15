@@ -14,12 +14,7 @@
 typedef struct {
     bool actuators[NUM_ACTUATORS];
     arm_lvl_e arm_level;
-
     pthread_rwlock_t rw_lock;
-    pthread_rwlockattr_t rw_lock_attr;
-
-    int read_count, write_count;
-
 } padstate_t;
 
 void padstate_init(padstate_t *state);

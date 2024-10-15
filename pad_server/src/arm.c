@@ -6,6 +6,7 @@
 #include "../../packets/packet.h"
 #include "arm.h"
 #include "state.h"
+
 /*
  * Attempt to change arming level.
  * @param state The current state of the pad server.
@@ -21,7 +22,6 @@ int change_arm_level(padstate_t *state, arm_lvl_e new_arm, cntrl_subtype_e cmd_s
 
     int err;
 
-    // check if we're able to change the source
     arm_lvl_e current_state;
     err = padstate_get_level(state, &current_state);
     if (err) {

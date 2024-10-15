@@ -7,11 +7,7 @@
 
 /* TODO: docs */
 void padstate_init(padstate_t *state) {
-    pthread_rwlockattr_setkind_np(
-        &state->rw_lock_attr, PTHREAD_RWLOCK_PREFER_WRITER_NONRECURSIVE_NP); // Linux only, change if we deploy to
-                                                                             // nuttx, default for nuttx is writers pref
-    pthread_rwlock_init(&state->rw_lock, &state->rw_lock_attr);
-
+    pthread_rwlock_init(&state->rw_lock, NULL);
     // TODO: Is this right? Can we assume if the program is running then the pad is armed?
     state->arm_level = ARMED_PAD;
     for (unsigned int i = 0; i < NUM_ACTUATORS; i++) {
@@ -19,7 +15,6 @@ void padstate_init(padstate_t *state) {
     }
 }
 
-//
 /* TODO: docs
  *
  */
@@ -30,10 +25,7 @@ int padstate_get_level(padstate_t *state, arm_lvl_e *arm_val) {
 
     *arm_val = state->arm_level;
 
-    err = pthread_rwlock_unlock(&state->rw_lock);
-    if (err) return err;
-
-    return 0;
+    return pthread_rwlock_unlock(&state->rw_lock);
 }
 
 /* TODO: docs
@@ -46,10 +38,7 @@ int padstate_change_level(padstate_t *state, arm_lvl_e new_arm) {
 
     state->arm_level = new_arm;
 
-    err = pthread_rwlock_unlock(&state->rw_lock);
-    if (err) return err;
-
-    return 0;
+    return pthread_rwlock_unlock(&state->rw_lock);
 }
 /* TODO: docs
  * NOTE: This does not check for valid actuator ID
@@ -61,7 +50,5 @@ int padstate_actuate(padstate_t *state, uint8_t id, bool new_state) {
 
     state->actuators[id] = new_state;
 
-    err = pthread_rwlock_unlock(&state->rw_lock);
-
-    return 0;
+    return pthread_rwlock_unlock(&state->rw_lock);
 }
