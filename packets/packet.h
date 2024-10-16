@@ -4,7 +4,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#define PACKED __attribute__ ((packed))
+#define PACKED __attribute__((packed))
 
 /* PACKET HEADERS */
 
