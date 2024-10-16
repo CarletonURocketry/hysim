@@ -7,6 +7,8 @@
 #include <unistd.h>
 
 #include "../../packets/packet.h"
+#include "actuator.h"
+#include "arm.h"
 #include "controller.h"
 
 /* Helper function for returning an error code from a thread */
@@ -173,12 +175,34 @@ void *controller_run(void *arg) {
                     act_req_p req;
                     controller_recv(&controller, &req, sizeof(req));
                     printf("Received actuator request for ID #%u and state %s.\n", req.id, req.state ? "on" : "off");
+                    /*
+                    if (req.id == ID_QUICK_DISCONNECT) {
+                        err = change_arm_level(args->state, ARMED_DISCONNECTED, CNTRL_ACT_REQ);
+                        if (err) fprintf(stderr, "Could not change arm level with error: %d\n", err);
+                    } else if (req.id == ID_IGNITER) {
+                        err = change_arm_level(args->state, ARMED_LAUNCH, CNTRL_ACT_REQ);
+                        if (err) fprintf(stderr, "Could not change arm level with error: %d\n", err);
+                    }
+                    */
                 } break;
-                case CNTRL_ARM_REQ: {
+                case CNTRL_ARM_REQ:
                     arm_req_p req;
                     controller_recv(&controller, &req, sizeof(req));
                     printf("Received arming state %u.\n", req.level);
-                } break;
+
+                    err = change_arm_level(args->state, req.level, CNTRL_ARM_REQ);
+
+                    switch (err) {
+                    case -1:
+                        fprintf(stderr, "Could not change arming level with error: %s\n", strerror(errno));
+                        break;
+                    case ARM_DENIED:
+                    case ARM_INV:
+                        fprintf(stderr, "Could not change arming level with error: %d\n",
+                                err); // 1 -> DENIED, 2-> INVALID
+                        break;
+                    }
+                    break;
                 }
 
                 break;
