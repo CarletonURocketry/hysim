@@ -3,8 +3,8 @@
 
 #include "state.h"
 #include <netinet/in.h>
-#include <sys/socket.h>
 #include <semaphore.h>
+#include <sys/socket.h>
 
 #define MAX_TELEMETRY 5
 
