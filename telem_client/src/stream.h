@@ -1,8 +1,8 @@
 #ifndef _STREAM_H_
 #define _STREAM_H_
 
-#include <sys/socket.h>
 #include <netinet/in.h>
+#include <sys/socket.h>
 
 typedef struct {
     int sock;

@@ -89,8 +89,9 @@ static void cancel_wrapper(void *arg) { pthread_cancel(*(pthread_t *)(arg)); }
  * @param id The id of that data
  * @param time Time of the data
  * @param press_temp_mass The actual data being sent, could be pressure, temperatur or mass
-*/
-static void telemetry_publish_data(telemetry_sock_t *sock, telem_subtype_e type, uint8_t id, uint32_t time, uint32_t press_temp_mass) {
+ */
+static void telemetry_publish_data(telemetry_sock_t *sock, telem_subtype_e type, uint8_t id, uint32_t time,
+                                   uint32_t press_temp_mass) {
     header_p hdr = {.type = TYPE_TELEM, .subtype = type};
     pressure_p pressureBody = {.id = id, .time = time, .pressure = press_temp_mass};
     temp_p temperatureBody = {.id = id, .time = time, .temperature = press_temp_mass};
@@ -99,31 +100,31 @@ static void telemetry_publish_data(telemetry_sock_t *sock, telem_subtype_e type,
     struct iovec pkt[2] = {
         {.iov_base = &hdr, .iov_len = sizeof(hdr)},
     };
-    
+
     /*Create the appropriate body base on type*/
     struct iovec tmp;
     switch (type) {
-        case TELEM_PRESSURE:{
-            tmp.iov_base = &pressureBody;
-            tmp.iov_len = sizeof(pressureBody);
-            pkt[1] = tmp;
-            break;
-        }
-        case TELEM_MASS:{
-            tmp.iov_base = &massBody;
-            tmp.iov_len = sizeof(massBody);
-            pkt[1] = tmp;
-            break; 
-        }
-        case TELEM_TEMP:{
-            tmp.iov_base = &temperatureBody;
-            tmp.iov_len = sizeof(temperatureBody);
-            pkt[1] = tmp;
-            break; 
-        }
-        default:
-            printf("Invalid type");
-            thread_return(0);
+    case TELEM_PRESSURE: {
+        tmp.iov_base = &pressureBody;
+        tmp.iov_len = sizeof(pressureBody);
+        pkt[1] = tmp;
+        break;
+    }
+    case TELEM_MASS: {
+        tmp.iov_base = &massBody;
+        tmp.iov_len = sizeof(massBody);
+        pkt[1] = tmp;
+        break;
+    }
+    case TELEM_TEMP: {
+        tmp.iov_base = &temperatureBody;
+        tmp.iov_len = sizeof(temperatureBody);
+        pkt[1] = tmp;
+        break;
+    }
+    default:
+        printf("Invalid type");
+        thread_return(0);
     }
     struct msghdr msg = {
         .msg_name = NULL,
@@ -141,11 +142,11 @@ static void telemetry_publish_data(telemetry_sock_t *sock, telem_subtype_e type,
 /*
  * A function to create random data if not put in any file to read from
  * @params arg The arguent to run the telemetry thread
-*/
-static void random_data(telemetry_args_t *args){
-	/*Start telemetry socket */
-	telemetry_sock_t telem;
-	int err;
+ */
+static void random_data(telemetry_args_t *args) {
+    /*Start telemetry socket */
+    telemetry_sock_t telem;
+    int err;
     err = telemetry_init(&telem, args->port);
     if (err) {
         fprintf(stderr, "Could not start telemetry socket: %s\n", strerror(err));
@@ -153,28 +154,28 @@ static void random_data(telemetry_args_t *args){
     }
     pthread_cleanup_push(telemetry_cleanup, &telem);
 
-	uint32_t time = 0;
-	uint32_t pressure = 0;
-	uint32_t temperature = 0;
+    uint32_t time = 0;
+    uint32_t pressure = 0;
+    uint32_t temperature = 0;
     uint32_t mass = 4000;
-	/* Start transmitting telemetry to active clients */
-    for (;;) {	
-		pressure = (pressure + 1) % 255;
-		telemetry_publish_data(&telem, TELEM_PRESSURE, 1, time, 100 + pressure * 10);
-		telemetry_publish_data(&telem, TELEM_PRESSURE, 2, time, 200 + pressure * 20);
-		telemetry_publish_data(&telem, TELEM_PRESSURE, 3, time, 300 + pressure * 30);
-		telemetry_publish_data(&telem, TELEM_PRESSURE, 4, time, 250 + pressure * 40);
+    /* Start transmitting telemetry to active clients */
+    for (;;) {
+        pressure = (pressure + 1) % 255;
+        telemetry_publish_data(&telem, TELEM_PRESSURE, 1, time, 100 + pressure * 10);
+        telemetry_publish_data(&telem, TELEM_PRESSURE, 2, time, 200 + pressure * 20);
+        telemetry_publish_data(&telem, TELEM_PRESSURE, 3, time, 300 + pressure * 30);
+        telemetry_publish_data(&telem, TELEM_PRESSURE, 4, time, 250 + pressure * 40);
 
-		temperature = (temperature + 1) % 20 + 20;
-		telemetry_publish_data(&telem, TELEM_TEMP, 1, time, temperature - 1);
-		telemetry_publish_data(&telem, TELEM_TEMP, 2, time, temperature + 1);
-		telemetry_publish_data(&telem, TELEM_TEMP, 3, time, temperature - 2);
-		telemetry_publish_data(&telem, TELEM_TEMP, 4, time, temperature + 2);
+        temperature = (temperature + 1) % 20 + 20;
+        telemetry_publish_data(&telem, TELEM_TEMP, 1, time, temperature - 1);
+        telemetry_publish_data(&telem, TELEM_TEMP, 2, time, temperature + 1);
+        telemetry_publish_data(&telem, TELEM_TEMP, 3, time, temperature - 2);
+        telemetry_publish_data(&telem, TELEM_TEMP, 4, time, temperature + 2);
 
-        mass = (mass + 10) % 4000 + 3900; 
-		telemetry_publish_data(&telem, TELEM_MASS, 1, time, temperature + 2);
+        mass = (mass + 10) % 4000 + 3900;
+        telemetry_publish_data(&telem, TELEM_MASS, 1, time, temperature + 2);
 
-		time = (time + 1) % 1000000;
+        time = (time + 1) % 1000000;
         usleep(1000);
     }
 
@@ -234,12 +235,12 @@ void *telemetry_run(void *arg) {
         }
 
         /* TODO: parse all data */
-	
+
         char *rest = buffer;
         char *time_str = strtok_r(rest, ",", &rest);
         uint32_t time = strtoul(time_str, NULL, 10);
-		char *mass_str = strtok_r(rest, ",", &rest);
-		uint32_t mass = strtoul(mass_str, NULL, 10);
+        char *mass_str = strtok_r(rest, ",", &rest);
+        uint32_t mass = strtoul(mass_str, NULL, 10);
         char *pstr = strtok_r(rest, ",", &rest);
         uint32_t pressure = strtoul(pstr, NULL, 10);
 
