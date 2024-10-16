@@ -131,7 +131,7 @@ int main(int argc, char **argv) {
 
                 // check what type of command it is
                 switch (commands[i].subtype) {
-                case CNTRL_ACT_REQ:
+                case CNTRL_ACT_REQ: {
                     switch_t *actuator = commands[i].priv;                                  // get the actuator data
                     actuator->state = !actuator->state;                                     // flip the state
                     act_req_p act_req = {.id = actuator->act_id, .state = actuator->state}; // Create message
@@ -139,12 +139,14 @@ int main(int argc, char **argv) {
                     pad_send(&pad, &hdr, sizeof(hdr));
                     pad_send(&pad, &act_req, sizeof(act_req));
                     break;
-                case CNTRL_ARM_REQ:
+                }
+                case CNTRL_ARM_REQ: {
                     uint8_t *level = commands[i].priv;             // get arming level data
                     arm_req_p arm_req = {.level = (uint8_t)level}; // create message
                     pad_send(&pad, &hdr, sizeof(hdr));
                     pad_send(&pad, &arm_req, sizeof(arm_req));
                     break;
+                }
                 case CNTRL_ACT_ACK:
                 case CNTRL_ARM_ACK:
                     break;
