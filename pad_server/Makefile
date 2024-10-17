@@ -1,21 +1,17 @@
-CC = gcc
-CFLAGS = -Wall -Wextra -pthread
-OUT = pad
+include $(APPDIR)/Make.defs
 
-SRCDIR = $(abspath ./src)
-SRCS = $(wildcard $(SRCDIR)/*.c)
-SRCS += $(wildcard ../packets/*.c)
+# Application information for pad server
 
-OBJS = $(patsubst %.c,%.o,$(SRCS))
+PROGNAME = $(CONFIG_HYSIM_PAD_SERVER_PROGNAME)
+PRIORITY = $(CONFIG_HYSIM_PAD_SERVER_PRIORITY)
+STACKSIZE = $(CONFIG_HYSIM_PAD_SERVER_STACKSIZE)
+MODULE = $(CONFIG_HYSIM_PAD_SERVER)
 
-all: $(OUT)
+# Pad server recipe
 
-$(OUT): $(OBJS)
-	$(CC) $(CFLAGS) $(OBJS) -o $(OUT)
+MAINSRC = src/pad_server_main.c
 
-%.o: %.c
-	$(CC) $(CFLAGS) $(WARNINGS) -o $@ -c $<
+CSRCS += $(wildcard src/*.c)
+CSRCS += ../packets/packet.c
 
-clean:
-	@rm $(OUT)
-	@rm $(OBJS)
+include $(APPDIR)/Application.mk
