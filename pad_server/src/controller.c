@@ -185,7 +185,7 @@ void *controller_run(void *arg) {
                     }
                     */
                 } break;
-                case CNTRL_ARM_REQ:
+                case CNTRL_ARM_REQ: {
                     arm_req_p req;
                     controller_recv(&controller, &req, sizeof(req));
                     printf("Received arming state %u.\n", req.level);
@@ -203,6 +203,7 @@ void *controller_run(void *arg) {
                         break;
                     }
                     break;
+                }
                 }
 
                 break;
