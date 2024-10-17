@@ -1,0 +1,1 @@
+include $(wildcard $(APPDIR)/hysim/*/Make.defs)

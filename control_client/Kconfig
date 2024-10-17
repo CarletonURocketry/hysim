@@ -1,0 +1,26 @@
+config HYSIM_CONTROL_CLIENT
+        tristate "Control client"
+        default n
+        ---help---
+                Enable the control client application for sending commands to
+                the hybrid control system.
+
+if HYSIM_CONTROL_CLIENT
+
+config HYSIM_CONTROL_CLIENT_PROGNAME
+        string "Program name"
+        default "control_client"
+        ---help---
+                This is the name of the program that will be used for the
+                control client application.
+
+config HYSIM_CONTROL_CLIENT_PRIORITY
+        int "Control client task priority"
+        default 100
+
+config HYSIM_CONTROL_CLIENT_STACKSIZE
+        int "Control client stack size"
+        default DEFAULT_TASK_STACKSIZE
+
+endif
+

@@ -1,0 +1,26 @@
+config HYSIM_TELEM_CLIENT
+        tristate "Telemetry client"
+        default n
+        ---help---
+                Enable the telemetry client application for receiving telemetry
+                data from the hybrid control system.
+
+if HYSIM_TELEM_CLIENT
+
+config HYSIM_TELEM_CLIENT_PROGNAME
+        string "Program name"
+        default "telem_client"
+        ---help---
+                This is the name of the program that will be used for the
+                telemetry client application.
+
+config HYSIM_TELEM_CLIENT_PRIORITY
+        int "Telemetry client task priority"
+        default 100
+
+config HYSIM_TELEM_CLIENT_STACKSIZE
+        int "Telemetry client stack size"
+        default DEFAULT_TASK_STACKSIZE
+
+endif
+

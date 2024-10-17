@@ -1,11 +1,3 @@
-SIMULATIONS = control_client pad_server telem_client
+MENUDESC = "hysim"
 
-.PHONY: $(SIMULATIONS)
-
-all: $(SIMULATIONS)
-
-$(SIMULATIONS):
-	$(MAKE) -C $(abspath $@)
-
-clean:
-	for sim in $(SIMULATIONS); do $(MAKE) -C $$sim clean; done
+include $(APPDIR)/Directory.mk

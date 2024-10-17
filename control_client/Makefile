@@ -1,21 +1,17 @@
-CC = gcc
-CFLAGS = -Wall -Wextra
-OUT = control
+include $(APPDIR)/Make.defs
 
-SRCDIR = $(abspath ./src)
-SRCS = $(wildcard $(SRCDIR)/*.c)
-SRCS += $(wildcard ../packets/*.c)
+# Application information for control client
 
-OBJS = $(patsubst %.c,%.o,$(SRCS))
+PROGNAME = $(CONFIG_HYSIM_CONTROL_CLIENT_PROGNAME)
+PRIORITY = $(CONFIG_HYSIM_CONTROL_CLIENT_PRIORITY)
+STACKSIZE = $(CONFIG_HYSIM_CONTROL_CLIENT_STACKSIZE)
+MODULE = $(CONFIG_HYSIM_CONTROL_CLIENT)
 
-all: $(OUT)
+# Control client recipe
 
-$(OUT): $(OBJS)
-	$(CC) $(CFLAGS) $(OBJS) -o $(OUT)
+MAINSRC = src/control_client_main.c
 
-%.o: %.c
-	$(CC) $(CFLAGS) $(WARNINGS) -o $@ -c $<
+CSRCS += $(wildcard src/*.c)
+CSRCS += ../packets/packet.c
 
-clean:
-	@rm $(OUT)
-	@rm $(OBJS)
+include $(APPDIR)/Application.mk
