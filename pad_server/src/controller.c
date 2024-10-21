@@ -106,6 +106,17 @@ static ssize_t controller_recv(controller_t *controller, void *buf, size_t n) {
     return recv(controller->client, buf, n, 0);
 }
 
+/*
+ * Send buf to controller client
+ * @param controller The controller to send to.
+ * @param buf The buffer with the payload.
+ * @param n The size of buf
+ * @return The number of bytes written. -1 indicates an error.
+ */
+static ssize_t controller_send(controller_t *controller, void *buf, size_t n) {
+    return send(controller->client, buf, n, 0);
+}
+
 /* Run the controller logic
  * TODO: docs
  */
@@ -161,8 +172,6 @@ void *controller_run(void *arg) {
                 break;
             }
 
-            // TODO: handle recv errors
-
             switch ((packet_type_e)hdr.type) {
             case TYPE_CNTRL:
 
@@ -171,9 +180,10 @@ void *controller_run(void *arg) {
                 case CNTRL_ARM_ACK:
                     fprintf(stderr, "Unexpectedly received acknowledgement from sender.\n");
                     break;
+
                 case CNTRL_ACT_REQ: {
                     act_req_p req;
-                    controller_recv(&controller, &req, sizeof(req));
+                    controller_recv(&controller, &req, sizeof(req)); // TODO: handle recv errors
                     printf("Received actuator request for ID #%u and state %s.\n", req.id, req.state ? "on" : "off");
                     /*
                     if (req.id == ID_QUICK_DISCONNECT) {
@@ -184,31 +194,48 @@ void *controller_run(void *arg) {
                         if (err) fprintf(stderr, "Could not change arm level with error: %d\n", err);
                     }
                     */
+
+                    // TODO: change the appropriate acknowledgement for each error status
+                    act_ack_p ack = {.id = req.id, .status = ACT_OK};
+                    controller_send(&controller, &ack, sizeof(ack));
+
                 } break;
-                case CNTRL_ARM_REQ:
+
+                case CNTRL_ARM_REQ: {
                     arm_req_p req;
-                    controller_recv(&controller, &req, sizeof(req));
+                    controller_recv(&controller, &req, sizeof(req)); // TODO: handle recv errors
                     printf("Received arming state %u.\n", req.level);
 
                     err = change_arm_level(args->state, req.level, CNTRL_ARM_REQ);
+                    arm_ack_p ack;
 
                     switch (err) {
                     case -1:
                         fprintf(stderr, "Could not change arming level with error: %s\n", strerror(errno));
                         break;
+                    case ARM_OK:
+                        fprintf(stderr, "Arming level changed succesfully to %d\n", req.level);
+                        ack.status = ARM_OK;
+                        controller_send(&controller, &ack, sizeof(ack));
+                        break;
                     case ARM_DENIED:
+                        fprintf(stderr, "Could not change arming level with error: %d, arming denied\n", err);
+                        ack.status = ARM_DENIED;
+                        controller_send(&controller, &ack, sizeof(ack));
+                        break;
                     case ARM_INV:
-                        fprintf(stderr, "Could not change arming level with error: %d\n",
-                                err); // 1 -> DENIED, 2-> INVALID
+                        fprintf(stderr, "Could not change arming level with error: %d, arming invalid\n", err);
+                        ack.status = ARM_INV;
+                        controller_send(&controller, &ack, sizeof(ack));
                         break;
                     }
+
+                } break;
+
+                default:
+                    fprintf(stderr, "Invalid message type: %u\n", hdr.type);
                     break;
                 }
-
-                break;
-            default:
-                fprintf(stderr, "Invalid message type: %u\n", hdr.type);
-                break;
             }
         }
     }

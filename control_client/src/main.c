@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <sys/types.h>
 #include <unistd.h>
 
 #include "../../packets/packet.h"
@@ -66,6 +67,7 @@ static command_t commands[] = {
 
 uint16_t port = 50001; /* Default port */
 pad_t pad;
+arm_t arm;
 
 void handle_term(int sig) {
     (void)sig;
@@ -128,25 +130,81 @@ int main(int argc, char **argv) {
 
             if (commands[i].key == key) {
                 header_p hdr = {.type = TYPE_CNTRL, .subtype = commands[i].subtype}; // create header
+                ssize_t iovlen = 2;
+                struct iovec iov[iovlen];
+                iov[0].iov_base = &hdr;
+                iov[0].iov_len = sizeof(hdr);
 
                 // check what type of command it is
                 switch (commands[i].subtype) {
                 case CNTRL_ACT_REQ: {
-                    switch_t *actuator = commands[i].priv;                                  // get the actuator data
-                    actuator->state = !actuator->state;                                     // flip the state
-                    act_req_p act_req = {.id = actuator->act_id, .state = actuator->state}; // Create message
+                    switch_t *actuator = commands[i].priv;                                   // get the actuator data
+                    act_req_p act_req = {.id = actuator->act_id, .state = !actuator->state}; // Create message
 
-                    pad_send(&pad, &hdr, sizeof(hdr));
-                    pad_send(&pad, &act_req, sizeof(act_req));
-                    break;
-                }
+                    iov[1].iov_base = &act_req;
+                    iov[1].iov_len = sizeof(act_req);
+                    pad_send(&pad, iov, iovlen);
+
+                    act_ack_p act_ack;
+                    err = pad_recv(&pad, &act_ack, sizeof(act_ack));
+                    if (err <= 0) {
+                        fprintf(stderr, "Server did not acknowledge actuator request with id %d\n", actuator->act_id);
+                        break;
+                    }
+
+                    switch (act_ack.status) {
+                    case ACT_OK:
+                        fprintf(stderr,
+                                "The pad control system has put the actuator with id %d in the requested state\n",
+                                act_ack.id);
+                        actuator->state = !actuator->state; // flipping the state of the actuator
+                        break;
+                    case ACT_DENIED:
+                        fprintf(stderr, "The current level is too low to operate the actuator with id %d\n",
+                                act_ack.id);
+                        break;
+                    case ACT_DNE:
+                        fprintf(stderr, "Actuator id %d is not associated with any actuator\n", act_ack.id);
+                        break;
+                    case ACT_INV:
+                        fprintf(stderr, "Invalid state was requested for actuator with id %d\n", act_ack.id);
+                        break;
+                    }
+                } break;
+
                 case CNTRL_ARM_REQ: {
                     uint8_t *level = commands[i].priv;             // get arming level data
                     arm_req_p arm_req = {.level = (uint8_t)level}; // create message
-                    pad_send(&pad, &hdr, sizeof(hdr));
-                    pad_send(&pad, &arm_req, sizeof(arm_req));
-                    break;
-                }
+
+                    iov[1].iov_base = &arm_req;
+                    iov[1].iov_len = sizeof(arm_req);
+                    pad_send(&pad, iov, iovlen);
+
+                    arm_ack_p arm_ack;
+                    err = pad_recv(&pad, &arm_ack, sizeof(arm_ack));
+                    if (err <= 0) {
+                        fprintf(stderr, "Server did not acknowledge arming request with level %d\n", arm_req.level);
+                        break;
+                    }
+
+                    switch (arm_ack.status) {
+                    case ARM_OK:
+                        fprintf(stderr, "Arming request with level %d was processed succesfully\n", arm_req.level);
+                        arm.level = arm_req.level; // saving the arming level
+                        break;
+                    case ARM_DENIED:
+                        fprintf(stderr,
+                                "The arming request with level %d could not be completed because the current arming "
+                                "level is not high enough for that progression, or the progression must be caused via "
+                                "an actuator command\n",
+                                arm_req.level);
+                        break;
+                    case ARM_INV:
+                        fprintf(stderr, "Invalid arming level %d was specified\n", arm_req.level);
+                        break;
+                    }
+                } break;
+
                 case CNTRL_ACT_ACK:
                 case CNTRL_ARM_ACK:
                     break;
