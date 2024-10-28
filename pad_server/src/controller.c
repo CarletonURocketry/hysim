@@ -26,6 +26,9 @@ static int controller_init(controller_t *controller, uint16_t port) {
     controller->sock = socket(AF_INET, SOCK_STREAM, 0);
     if (controller->sock < 0) return errno;
 
+    int opt = 1;
+    setsockopt(controller->sock, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+
     /* Create address */
     controller->addr.sin_family = AF_INET;
     controller->addr.sin_addr.s_addr = INADDR_ANY;
@@ -38,17 +41,25 @@ static int controller_init(controller_t *controller, uint16_t port) {
 }
 
 /*
- * Connect to the controller client.
+ * Bind to the controller client.
  * @param controller The controller to use for the connection.
  * @return 0 for success, or the error that occurred.
  */
-static int controller_accept(controller_t *controller) {
-
+static int controller_bind(controller_t *controller) {
     /* Bind the controller socket */
     if (bind(controller->sock, (struct sockaddr *)&controller->addr, sizeof(controller->addr)) < 0) {
         return errno;
     }
 
+    return 0;
+}
+
+/*
+ * Accept a new connection on the controller client.
+ * @param controller The controller to use for the connection.
+ * @return 0 for success, or the error that occurred.
+ */
+static int controller_accept(controller_t *controller) {
     /* Listen for a controller client connection */
     if (listen(controller->sock, MAX_CONTROLLERS) < 0) {
         return errno;
@@ -77,13 +88,6 @@ static int controller_disconnect(controller_t *controller) {
             return errno;
         }
         controller->client = -1;
-    }
-
-    if (controller->sock >= 0) {
-        if (close(controller->sock) < 0) {
-            return errno;
-        }
-        controller->sock = -1;
     }
 
     return 0;
@@ -129,15 +133,24 @@ void *controller_run(void *arg) {
     pthread_cleanup_push(controller_cleanup, &controller);
     fprintf(stderr, "Waiting for controller...\n");
 
+    int err;
+    /* Initialize the controller (creates a new socket) */
+    err = controller_init(&controller, args->port);
+    if (err) {
+        fprintf(stderr, "Could not initialize controller with error: %s\n", strerror(err));
+        continue;
+    }
+
+    err = controller_bind(&controller);
+    if (err) {
+        fprintf(stderr, "Could not bind controller connection with error: %s\n", strerror(err));
+        controller_disconnect(&controller);
+        continue;
+    }
+
     for (;;) {
         int err;
         /* Initialize the controller (creates a new socket) */
-        err = controller_init(&controller, args->port);
-        if (err) {
-            fprintf(stderr, "Could not initialize controller with error: %s\n", strerror(err));
-            continue;
-        }
-
         err = controller_accept(&controller);
         if (err) {
             fprintf(stderr, "Could not accept controller connection with error: %s\n", strerror(err));

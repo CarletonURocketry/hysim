@@ -91,8 +91,10 @@ ssize_t pad_send(pad_t *pad, struct iovec *iov, ssize_t iovlen) {
  * @return 0 on success, the error that occurred on failure.
  */
 int pad_disconnect(pad_t *pad) {
-    if (close(pad->sock) < 0) {
-        return errno;
+    if (pad->sock >= 0) {
+        if (close(pad->sock) < 0) {
+            return errno;
+        }
     }
     return 0;
 }
