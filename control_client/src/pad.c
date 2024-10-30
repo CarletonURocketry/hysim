@@ -95,6 +95,7 @@ int pad_disconnect(pad_t *pad) {
         if (close(pad->sock) < 0) {
             return errno;
         }
+        pad->sock = -1;
     }
     return 0;
 }

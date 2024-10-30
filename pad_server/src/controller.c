@@ -37,16 +37,6 @@ static int controller_init(controller_t *controller, uint16_t port) {
     /* Make sure client socket fd is marked as invalid until it gets a connection */
     controller->client = -1;
 
-    return 0;
-}
-
-/*
- * Bind to the controller client.
- * @param controller The controller to use for the connection.
- * @return 0 for success, or the error that occurred.
- */
-static int controller_bind(controller_t *controller) {
-    /* Bind the controller socket */
     if (bind(controller->sock, (struct sockaddr *)&controller->addr, sizeof(controller->addr)) < 0) {
         return errno;
     }
@@ -85,6 +75,7 @@ static int controller_disconnect(controller_t *controller) {
     // only close the connection if it is valid
     if (controller->client >= 0) {
         if (close(controller->client) < 0) {
+            fprintf(stderr, "REEEE");
             return errno;
         }
         controller->client = -1;
@@ -141,15 +132,7 @@ void *controller_run(void *arg) {
         continue;
     }
 
-    err = controller_bind(&controller);
-    if (err) {
-        fprintf(stderr, "Could not bind controller connection with error: %s\n", strerror(err));
-        controller_disconnect(&controller);
-        continue;
-    }
-
     for (;;) {
-        int err;
         /* Initialize the controller (creates a new socket) */
         err = controller_accept(&controller);
         if (err) {

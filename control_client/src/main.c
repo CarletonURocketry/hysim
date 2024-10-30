@@ -1,3 +1,4 @@
+#include "errno.h"
 #include <arpa/inet.h>
 #include <signal.h>
 #include <stdbool.h>
@@ -98,20 +99,18 @@ int main(int argc, char **argv) {
         }
     }
 
+    int err;
+
     signal(SIGINT, handle_term);
+
     char key;
     for (;;) {
-        int err;
-        bool pad_connected = true;
-
         fprintf(stderr, "Waiting for pad...\n");
         err = pad_init(&pad, "127.0.0.1", port);
         if (err) {
             fprintf(stderr, "Could not initialize pad server with error: %s\n", strerror(err));
             exit(EXIT_FAILURE);
         }
-
-        /* Handle disconnects */
 
         err = pad_connect_forever(&pad);
         if (err) {
@@ -152,11 +151,13 @@ int main(int argc, char **argv) {
 
                         act_ack_p act_ack;
                         err = pad_recv(&pad, &act_ack, sizeof(act_ack));
-                        if (err <= 0) {
-                            fprintf(stderr, "Server did not acknowledge actuator request with id %d, reconnecting...\n",
+                        if (err == -1 && errno == EAGAIN || errno == EWOULDBLOCK) {
+                            fprintf(stderr, "Server did not acknowledge actuator request with id %d\n",
                                     actuator->act_id);
+                            break;
+                        } else if (err == 0 || (err == -1 && (errno == ECONNREFUSED || errno == ECONNRESET))) {
+                            fprintf(stderr, "Server unreachable... reconnecting\n");
                             pad_disconnect(&pad);
-                            pad_connected = false;
                             break;
                         }
 
@@ -190,12 +191,12 @@ int main(int argc, char **argv) {
 
                         arm_ack_p arm_ack;
                         err = pad_recv(&pad, &arm_ack, sizeof(arm_ack));
-                        if (err <= 0) {
-                            fprintf(stderr,
-                                    "Server did not acknowledge arming request with level %d, reconnecting...\n",
-                                    arm_req.level);
+                        if (err == -1 && errno == EAGAIN || errno == EWOULDBLOCK) {
+                            fprintf(stderr, "Server did not acknowledge arming request with level %d\n", arm_req.level);
+                            break;
+                        } else if (err == 0 || (err == -1 && (errno == ECONNREFUSED || errno == ECONNRESET))) {
+                            fprintf(stderr, "Server unreachable... reconnecting\n");
                             pad_disconnect(&pad);
-                            pad_connected = false;
                             break;
                         }
 
@@ -229,8 +230,8 @@ int main(int argc, char **argv) {
                     fprintf(stderr, "Invalid key: %c", key);
                 }
             }
-            putchar('\n');
-            if (pad_connected == false) {
+
+            if (pad.sock == -1) {
                 break;
             }
         }
