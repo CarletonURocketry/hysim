@@ -129,7 +129,7 @@ void *controller_run(void *arg) {
     err = controller_init(&controller, args->port);
     if (err) {
         fprintf(stderr, "Could not initialize controller with error: %s\n", strerror(err));
-        continue;
+        exit(EXIT_FAILURE);
     }
 
     for (;;) {
