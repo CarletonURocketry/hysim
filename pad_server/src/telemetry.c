@@ -13,7 +13,7 @@
 
 #include "telemetry.h"
 
-#define MULTICAST_ADDR "224.0.0.10"
+#define MULTICAST_ADDR "239.100.110.210"
 
 /* Helper function for returning an error code from a thread */
 #define thread_return(e) pthread_exit((void *)(unsigned long)((e)))

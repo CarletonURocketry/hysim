@@ -12,6 +12,7 @@
 #include "stream.h"
 
 #define TELEM_PORT 50002
+#define MULTICAST_ADDR "239.100.110.210" 
 
 stream_t telem_stream;
 
@@ -54,7 +55,7 @@ int main(int argc, char **argv) {
 
     int err;
 
-    err = stream_init(&telem_stream, "224.0.0.10", TELEM_PORT);
+    err = stream_init(&telem_stream, MULTICAST_ADDR, TELEM_PORT);
     if (err) {
         fprintf(stderr, "Could not initialize telemetry stream: %s\n", strerror(err));
         exit(EXIT_FAILURE);
