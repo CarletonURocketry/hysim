@@ -12,7 +12,7 @@
 #include "stream.h"
 
 #define TELEM_PORT 50002
-#define MULTICAST_ADDR "239.100.110.210" 
+#define MULTICAST_ADDR "239.100.110.210"
 
 stream_t telem_stream;
 
