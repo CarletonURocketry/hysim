@@ -1,4 +1,8 @@
 #include "actuator.h"
+#include "state.h"
+#include <errno.h>
+#include <stdint.h>
+#include <stdio.h>
 
 /* String names of the actuators. */
 static const char *ACTUATOR_STR[] = {
@@ -52,4 +56,67 @@ int actuator_off(actuator_t *act) { return act->off(act); }
  * @param act The actuator to get the string name of.
  * @return The string name of the actuator.
  */
-const char *actuator_name(actuator_t *act) { return ACTUATOR_STR[act->id]; }
+const char *actuator_get_name(actuator_t *act) { return ACTUATOR_STR[act->id]; }
+
+int actuator_set(padstate_t *state, uint8_t id, uint8_t req_state) {
+    if (id >= NUM_ACTUATORS) return ACT_DNE;
+
+    if (req_state != 0 && req_state != 1) return ACT_INV;
+    bool new_state = (bool)req_state;
+
+    arm_lvl_e arm_lvl;
+    int err = padstate_get_level(state, &arm_lvl);
+    if (err) {
+        errno = err;
+        return -1;
+    }
+
+    bool is_solanoid_valve = id >= ID_XV1 && id <= ID_XV12;
+
+    switch (arm_lvl) {
+    case ARMED_PAD:
+        return ACT_DENIED;
+        break;
+
+    case ARMED_VALVES:
+        if (!is_solanoid_valve) {
+            return ACT_DENIED;
+        }
+        break;
+
+    case ARMED_IGNITION:
+        if (!is_solanoid_valve && id != ID_QUICK_DISCONNECT) {
+            return ACT_DENIED;
+        }
+        break;
+
+    case ARMED_DISCONNECTED:
+        if (!is_solanoid_valve && id != ID_QUICK_DISCONNECT && id != ID_IGNITER) {
+            return ACT_DENIED;
+        }
+        break;
+
+    case ARMED_LAUNCH:
+        // every command is available
+        break;
+    }
+
+    bool current_state;
+    err = padstate_get_actuator(state, id, &current_state);
+    if (err) {
+        errno = err;
+        return -1;
+    }
+
+    if (new_state == current_state) {
+        return ACT_OK;
+    }
+
+    err = padstate_actuate(state, id, new_state);
+    if (err) {
+        errno = err;
+        return -1;
+    }
+
+    return ACT_OK;
+}

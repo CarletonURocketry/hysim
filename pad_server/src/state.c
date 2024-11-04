@@ -1,6 +1,7 @@
 #include <errno.h>
 #include <pthread.h>
 #include <semaphore.h>
+#include <stdbool.h>
 #include <stdio.h>
 
 #include "state.h"
@@ -49,6 +50,18 @@ int padstate_actuate(padstate_t *state, uint8_t id, bool new_state) {
     if (err) return err;
 
     state->actuators[id] = new_state;
+
+    return pthread_rwlock_unlock(&state->rw_lock);
+}
+
+int padstate_get_actuator(padstate_t *state, uint8_t act_id, bool *act_val) {
+    if (act_id < 0 || act_id >= NUM_ACTUATORS) return -1;
+
+    int err;
+    err = pthread_rwlock_rdlock(&state->rw_lock);
+    if (err) return err;
+
+    *act_val = state->actuators[act_id];
 
     return pthread_rwlock_unlock(&state->rw_lock);
 }
