@@ -21,6 +21,7 @@ void padstate_init(padstate_t *state);
 int padstate_get_level(padstate_t *state, arm_lvl_e *arm_val);
 int padstate_change_level(padstate_t *state, arm_lvl_e new_arm);
 int padstate_actuate(padstate_t *state, uint8_t id, bool new_state);
+int padstate_get_actuator(padstate_t *state, uint8_t act_id, bool *act_val);
 
 const char *actuator_name(uint8_t id);
 
