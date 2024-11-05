@@ -26,6 +26,9 @@ static int controller_init(controller_t *controller, uint16_t port) {
     controller->sock = socket(AF_INET, SOCK_STREAM, 0);
     if (controller->sock < 0) return errno;
 
+    int opt = 1;
+    setsockopt(controller->sock, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+
     /* Create address */
     controller->addr.sin_family = AF_INET;
     controller->addr.sin_addr.s_addr = INADDR_ANY;
@@ -34,21 +37,19 @@ static int controller_init(controller_t *controller, uint16_t port) {
     /* Make sure client socket fd is marked as invalid until it gets a connection */
     controller->client = -1;
 
-    return 0;
-}
-
-/*
- * Connect to the controller client.
- * @param controller The controller to use for the connection.
- * @return 0 for success, or the error that occurred.
- */
-static int controller_accept(controller_t *controller) {
-
-    /* Bind the controller socket */
     if (bind(controller->sock, (struct sockaddr *)&controller->addr, sizeof(controller->addr)) < 0) {
         return errno;
     }
 
+    return 0;
+}
+
+/*
+ * Accept a new connection on the controller client.
+ * @param controller The controller to use for the connection.
+ * @return 0 for success, or the error that occurred.
+ */
+static int controller_accept(controller_t *controller) {
     /* Listen for a controller client connection */
     if (listen(controller->sock, MAX_CONTROLLERS) < 0) {
         return errno;
@@ -65,25 +66,33 @@ static int controller_accept(controller_t *controller) {
 }
 
 /*
- * Close the connection to the controller.
+ * Close the connection to the controller listening socket
  * @param The controller to close the connection to.
  * @return 0 for success, the error that occurred otherwise.
  */
-static int controller_disconnect(controller_t *controller) {
+static int controller_sock_disconnect(controller_t *controller) {
+    // only close the connection if it is valid
+    if (controller->sock >= 0) {
+        if (close(controller->sock) < 0) {
+            return errno;
+        }
+        controller->sock = -1;
+    }
+    return 0;
+}
 
+/*
+ * Close the connection to the controller client
+ * @param The controller to close the connection to.
+ * @return 0 for success, the error that occurred otherwise.
+ */
+static int controller_client_disconnect(controller_t *controller) {
     // only close the connection if it is valid
     if (controller->client >= 0) {
         if (close(controller->client) < 0) {
             return errno;
         }
         controller->client = -1;
-    }
-
-    if (controller->sock >= 0) {
-        if (close(controller->sock) < 0) {
-            return errno;
-        }
-        controller->sock = -1;
     }
 
     return 0;
@@ -93,7 +102,10 @@ static int controller_disconnect(controller_t *controller) {
  * pthread cleanup handler for the controller.
  * @param arg A controller to disconnect and clean up.
  */
-static void controller_cleanup(void *arg) { controller_disconnect((controller_t *)(arg)); }
+static void controller_cleanup(void *arg) {
+    controller_client_disconnect((controller_t *)(arg));
+    controller_sock_disconnect((controller_t *)(arg));
+}
 
 /*
  * Receive bytes from the controller client.
@@ -127,21 +139,22 @@ void *controller_run(void *arg) {
     controller.client = -1;
 
     pthread_cleanup_push(controller_cleanup, &controller);
-    fprintf(stderr, "Waiting for controller...\n");
+
+    int err;
+    /* Initialize the controller (creates a new socket) */
+    err = controller_init(&controller, args->port);
+    if (err) {
+        fprintf(stderr, "Could not initialize controller with error: %s\n", strerror(err));
+        exit(EXIT_FAILURE);
+    }
 
     for (;;) {
-        int err;
+        fprintf(stderr, "Waiting for controller...\n");
         /* Initialize the controller (creates a new socket) */
-        err = controller_init(&controller, args->port);
-        if (err) {
-            fprintf(stderr, "Could not initialize controller with error: %s\n", strerror(err));
-            continue;
-        }
-
         err = controller_accept(&controller);
         if (err) {
             fprintf(stderr, "Could not accept controller connection with error: %s\n", strerror(err));
-            controller_disconnect(&controller);
+            controller_client_disconnect(&controller);
             continue;
         }
 
@@ -168,7 +181,7 @@ void *controller_run(void *arg) {
 
             // Error happened, do a cleanup and re-initialize connection
             if (bread <= 0) {
-                controller_disconnect(&controller);
+                controller_client_disconnect(&controller);
                 break;
             }
 
