@@ -57,6 +57,12 @@ int actuator_off(actuator_t *act) { return act->off(act); }
  */
 const char *actuator_get_name(actuator_t *act) { return ACTUATOR_STR[act->id]; }
 
+/*
+ * Set the value of an actuator
+ * @param id The actuator id
+ * @param req_state The new actuator state
+ * @return ACT_OK for success, ACT_DNE for invalid id, ACT_INV for invalid req_state, -1 for errors eith errno being set
+ */
 int actuator_set(padstate_t *state, uint8_t id, uint8_t req_state) {
     if (id >= NUM_ACTUATORS) return ACT_DNE;
 
