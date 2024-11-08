@@ -22,6 +22,14 @@ static const char *ACTUATOR_STR[] = {
     [ID_IGNITER] = "Igniter",
 };
 
+actuator_t actuator_controllers[NUM_ACTUATORS];
+
+void actuator_controllers_init() {
+    for (int i = 0; i < NUM_ACTUATORS; i++) {
+        actuator_init(&actuator_controllers[i], i, actuator_on, actuator_off, NULL);
+    }
+}
+
 /*
  * Initialize the fields of an actuator.
  * @param act The actuator to initialize.
@@ -41,14 +49,14 @@ void actuator_init(actuator_t *act, uint8_t id, actuate_f on, actuate_f off, voi
  * @param act The actuator to turn on.
  * @return 0 for success, an error code on failure.
  */
-int actuator_on(actuator_t *act) { return act->on(act); }
+int actuator_on(actuator_t *act) { return 0; }
 
 /*
  * Turn the actuator off.
  * @param act The actuator to turn off.
- * @return 0 for success, an error code on failure.
+ * @return 0 for an error code on failure.
  */
-int actuator_off(actuator_t *act) { return act->off(act); }
+int actuator_off(actuator_t *act) { return 0; }
 
 /*
  * Get the string name of the actuator.
@@ -61,67 +69,22 @@ const char *actuator_get_name(actuator_t *act) { return ACTUATOR_STR[act->id]; }
  * Set the value of an actuator
  * @param id The actuator id
  * @param req_state The new actuator state
- * @return ACT_OK for success, ACT_DNE for invalid id, ACT_INV for invalid req_state, -1 for errors eith errno being set
+ * @return ACT_OK for success, ACT_DNE for invalid id, ACT_INV for invalid req_state, -1 for errors eith errno being
+ * set
  */
-int actuator_set(padstate_t *state, uint8_t id, uint8_t req_state) {
-    if (id >= NUM_ACTUATORS) return ACT_DNE;
+int actuator_set(padstate_t *state, uint8_t id, bool new_state) {
 
-    if (req_state != 0 && req_state != 1) return ACT_INV;
-    bool new_state = (bool)req_state;
-
-    arm_lvl_e arm_lvl;
-    int err = padstate_get_level(state, &arm_lvl);
-    if (err) {
-        errno = err;
-        return -1;
+    if (new_state == true) {
+        actuator_controllers[id].on(&actuator_controllers[id]);
+    } else {
+        actuator_controllers[id].off(&actuator_controllers[id]);
     }
 
-    bool is_solanoid_valve = id >= ID_XV1 && id <= ID_XV12;
+    int err;
+    err = pthread_rwlock_wrlock(&state->rw_lock);
+    if (err) return err;
 
-    switch (arm_lvl) {
-    case ARMED_PAD:
-        return ACT_DENIED;
-        break;
+    state->actuators[id] = new_state;
 
-    case ARMED_VALVES:
-        if (!is_solanoid_valve) {
-            return ACT_DENIED;
-        }
-        break;
-
-    case ARMED_IGNITION:
-        if (!is_solanoid_valve && id != ID_QUICK_DISCONNECT) {
-            return ACT_DENIED;
-        }
-        break;
-
-    case ARMED_DISCONNECTED:
-        if (!is_solanoid_valve && id != ID_QUICK_DISCONNECT && id != ID_IGNITER) {
-            return ACT_DENIED;
-        }
-        break;
-
-    case ARMED_LAUNCH:
-        // every command is available
-        break;
-    }
-
-    bool current_state;
-    err = padstate_get_actuator(state, id, &current_state);
-    if (err) {
-        errno = err;
-        return -1;
-    }
-
-    if (new_state == current_state) {
-        return ACT_OK;
-    }
-
-    err = padstate_actuate(state, id, new_state);
-    if (err) {
-        errno = err;
-        return -1;
-    }
-
-    return ACT_OK;
+    return pthread_rwlock_unlock(&state->rw_lock);
 }
