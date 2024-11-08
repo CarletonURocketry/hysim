@@ -5,7 +5,10 @@ DESCRIPTION:
     Acts a client consuming telemetry data from the pad server.
 
 USAGE:
-    telem_client
+    telem_client [options]
+
+OPTIONS:
+   -a addr The multicast address to listen on.If not specified, address 224.0.0.10 is used.
 
 EXAMPLES:
-    telem_client
+    telem_client -a 224.0.0.10
