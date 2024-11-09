@@ -11,6 +11,7 @@
 typedef struct {
     padstate_t *state;
     uint16_t port;
+    char *addr;
     char *data_file;
 } telemetry_args_t;
 

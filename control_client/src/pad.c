@@ -3,9 +3,11 @@
 #include <netinet/in.h>
 #include <stdint.h>
 #include <sys/socket.h>
+#include <sys/types.h>
 #include <unistd.h>
 
 #include "pad.h"
+#define RCVTIMEO_SEC 3;
 
 /*
  * Initialize a pad structure.
@@ -21,6 +23,11 @@ int pad_init(pad_t *pad, const char *ip, uint16_t port) {
     if (pad->sock < 0) {
         return errno;
     }
+
+    struct timeval tv;
+    tv.tv_sec = RCVTIMEO_SEC;
+    tv.tv_usec = 0;
+    setsockopt(pad->sock, SOL_SOCKET, SO_RCVTIMEO, (const char *)&tv, sizeof tv);
 
     /* Create address */
     pad->addr.sin_family = AF_INET;
@@ -71,7 +78,12 @@ int pad_connect_forever(pad_t *pad) {
  * @param n The number of bytes in `buf` to be sent.
  * @return The number of bytes that were sent, or -1 on failure (errno indicates the error).
  */
-ssize_t pad_send(pad_t *pad, const void *buf, size_t n) { return send(pad->sock, buf, n, 0); }
+ssize_t pad_send(pad_t *pad, struct iovec *iov, ssize_t iovlen) {
+    struct msghdr msg = {0};
+    msg.msg_iov = iov;
+    msg.msg_iovlen = iovlen;
+    return sendmsg(pad->sock, &msg, 0);
+}
 
 /*
  * Close the connection to the pad server.
@@ -79,8 +91,20 @@ ssize_t pad_send(pad_t *pad, const void *buf, size_t n) { return send(pad->sock,
  * @return 0 on success, the error that occurred on failure.
  */
 int pad_disconnect(pad_t *pad) {
-    if (close(pad->sock) < 0) {
-        return errno;
+    if (pad->sock >= 0) {
+        if (close(pad->sock) < 0) {
+            return errno;
+        }
+        pad->sock = -1;
     }
     return 0;
 }
+
+/*
+ * Receive a message from the pad server.
+ * @param pad The pad server to send a message to.
+ * @param buf The destination buffer.
+ * @param n The size of the destination buffer.
+ * @return The number of bytes that were received, or -1 on failure (errno indicates the error).
+ */
+ssize_t pad_recv(pad_t *pad, void *buf, ssize_t n) { return recv(pad->sock, buf, n, 0); }

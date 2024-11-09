@@ -13,8 +13,6 @@
 
 #include "telemetry.h"
 
-#define MULTICAST_ADDR "224.0.0.10"
-
 /* Helper function for returning an error code from a thread */
 #define thread_return(e) pthread_exit((void *)(unsigned long)((e)))
 
@@ -30,7 +28,7 @@ typedef struct {
  * @param port The port number to use to accept connections.
  * @return 0 for success, error code on failure.
  */
-static int telemetry_init(telemetry_sock_t *sock, uint16_t port) {
+static int telemetry_init(telemetry_sock_t *sock, uint16_t port, char *addr) {
 
     /* Initialize the socket connection. */
     sock->sock = socket(AF_INET, SOCK_DGRAM, 0);
@@ -38,7 +36,7 @@ static int telemetry_init(telemetry_sock_t *sock, uint16_t port) {
 
     /* Create address */
     sock->addr.sin_family = AF_INET;
-    sock->addr.sin_addr.s_addr = inet_addr(MULTICAST_ADDR);
+    sock->addr.sin_addr.s_addr = inet_addr(addr);
     sock->addr.sin_port = htons(port);
 
     return 0;
@@ -147,7 +145,7 @@ static void random_data(telemetry_args_t *args) {
     /*Start telemetry socket */
     telemetry_sock_t telem;
     int err;
-    err = telemetry_init(&telem, args->port);
+    err = telemetry_init(&telem, args->port, args->addr);
     if (err) {
         fprintf(stderr, "Could not start telemetry socket: %s\n", strerror(err));
         thread_return(err);
@@ -201,7 +199,7 @@ void *telemetry_run(void *arg) {
 
     /* Start telemetry socket */
     telemetry_sock_t telem;
-    err = telemetry_init(&telem, args->port);
+    err = telemetry_init(&telem, args->port, args->addr);
     if (err) {
         fprintf(stderr, "Could not start telemetry socket: %s\n", strerror(err));
         thread_return(err);

@@ -8,8 +8,6 @@
 
 #include "stream.h"
 
-#define MULTICAST_ADDR "224.0.0.10"
-
 /*
  * Initialize a stream in preparation for connection.
  * TODO: docs
@@ -29,7 +27,7 @@ int stream_init(stream_t *stream, const char *ip, uint16_t port) {
 
     /* Register for multicast */
     struct ip_mreq mreq;
-    mreq.imr_multiaddr.s_addr = inet_addr(MULTICAST_ADDR);
+    mreq.imr_multiaddr.s_addr = inet_addr(ip);
     mreq.imr_interface.s_addr = htonl(INADDR_ANY);
 
     /* Register with multicast group */
