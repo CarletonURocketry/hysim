@@ -12,6 +12,8 @@ OPTIONS:
                 specified, no sensor data telemetry will be sent.
     -t port     The port number to use for the telemetry connection. If not
                 specified, port 50002 is used.
+    -a addr     The multicast address for the telemetry connection. If not
+                specified, address 224.0.0.10 is used.
     -c port     The port number to use for the controller connection. If not
                 specified, port 50001 is used.
 
