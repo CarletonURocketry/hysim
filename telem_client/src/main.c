@@ -1,3 +1,4 @@
+#include <arpa/inet.h>
 #include <errno.h>
 #include <getopt.h>
 #include <signal.h>
@@ -12,6 +13,7 @@
 #include "stream.h"
 
 #define TELEM_PORT 50002
+#define MULTICAST_ADDR "239.100.110.210"
 
 stream_t telem_stream;
 
@@ -35,16 +37,26 @@ void handle_int(int sig) {
 }
 
 int main(int argc, char **argv) {
+    char *multicast_addr = "224.0.0.10";
 
     /* Parse command line options. */
 
     int c;
-    while ((c = getopt(argc, argv, ":h")) != -1) {
+    while ((c = getopt(argc, argv, ":ha:")) != -1) {
         switch (c) {
         case 'h':
             puts(HELP_TEXT);
             exit(EXIT_SUCCESS);
             break;
+        case 'a':
+            multicast_addr = optarg;
+            struct in_addr temp_addr;
+            if (inet_pton(AF_INET, multicast_addr, &temp_addr) != 1) {
+                fprintf(stderr, "Invalid multicast address %s\n", multicast_addr);
+                exit(EXIT_FAILURE);
+            }
+            break;
+
         case '?':
             fprintf(stderr, "Unknown option -%c\n", optopt);
             exit(EXIT_FAILURE);
@@ -54,7 +66,7 @@ int main(int argc, char **argv) {
 
     int err;
 
-    err = stream_init(&telem_stream, "224.0.0.10", TELEM_PORT);
+    err = stream_init(&telem_stream, multicast_addr, TELEM_PORT);
     if (err) {
         fprintf(stderr, "Could not initialize telemetry stream: %s\n", strerror(err));
         exit(EXIT_FAILURE);
@@ -66,7 +78,6 @@ int main(int argc, char **argv) {
     header_p hdr;
     ssize_t b_read;
     for (;;) {
-
         b_read = stream_recv(&telem_stream, &hdr, sizeof(hdr));
 
         if (b_read == 0) {

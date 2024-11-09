@@ -1,3 +1,4 @@
+#include <arpa/inet.h>
 #include <getopt.h>
 #include <netinet/in.h>
 #include <pthread.h>
@@ -17,6 +18,7 @@
 
 #define TELEMETRY_PORT 50002
 #define CONTROL_PORT 50001
+#define MULTICAST_ADDR "224.0.0.10"
 
 padstate_t state;
 
@@ -24,7 +26,7 @@ pthread_t controller_thread;
 controller_args_t controller_args = {.port = CONTROL_PORT, .state = &state};
 
 pthread_t telem_thread;
-telemetry_args_t telemetry_args = {.port = TELEMETRY_PORT, .state = &state, .data_file = NULL};
+telemetry_args_t telemetry_args = {.port = TELEMETRY_PORT, .state = &state, .data_file = NULL, .addr = MULTICAST_ADDR};
 
 void int_handler(int sig) {
 
@@ -79,7 +81,7 @@ int main(int argc, char **argv) {
     /* Parse command line options. */
 
     int c;
-    while ((c = getopt(argc, argv, ":ht:c:f:")) != -1) {
+    while ((c = getopt(argc, argv, ":ht:c:f:a:")) != -1) {
         switch (c) {
         case 'h':
             puts(HELP_TEXT);
@@ -93,6 +95,14 @@ int main(int argc, char **argv) {
             break;
         case 'f':
             telemetry_args.data_file = optarg;
+            break;
+        case 'a':
+            telemetry_args.addr = optarg;
+            struct in_addr temp_addr;
+            if (inet_pton(AF_INET, telemetry_args.addr, &temp_addr) != 1) {
+                fprintf(stderr, "Invalid telemetry multicast address %s\n", telemetry_args.addr);
+                exit(EXIT_FAILURE);
+            }
             break;
         case '?':
             fprintf(stderr, "Unknown option -%c\n", optopt);

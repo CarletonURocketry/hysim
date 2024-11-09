@@ -1,0 +1,21 @@
+name: Build and Compile
+
+on:
+  pull_request:
+    branches:
+      - '**'  # This triggers on pull requests to any branch
+
+jobs:
+  build:
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Run make all
+        run: make all
