@@ -7,7 +7,6 @@
 #include <unistd.h>
 
 #include "../../packets/packet.h"
-#include "actuator.h"
 #include "arm.h"
 #include "controller.h"
 #include "state.h"
@@ -139,8 +138,6 @@ void *controller_run(void *arg) {
     controller.sock = -1;
     controller.client = -1;
 
-    actuator_controllers_init();
-
     pthread_cleanup_push(controller_cleanup, &controller);
 
     int err;
@@ -203,7 +200,7 @@ void *controller_run(void *arg) {
                     controller_recv(&controller, &req, sizeof(req)); // TODO: handle recv errors
                     printf("Received actuator request for ID #%u and state %s.\n", req.id, req.state ? "on" : "off");
 
-                    err = padstate_actuate(args->state, req.id, req.state);
+                    err = pad_actuate(args->state, req.id, req.state);
                     if (err == -1) {
                         fprintf(stderr, "Could not modify the actuator with error: %s\n", strerror(errno));
                         break;

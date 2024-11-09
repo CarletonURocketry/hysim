@@ -1,7 +1,7 @@
 #ifndef _ACTUATOR_H_
 #define _ACTUATOR_H_
 
-#include "state.h"
+#include <stdbool.h>
 #include <stdint.h>
 
 /* Agreed upon actuator IDs. */
@@ -35,16 +35,16 @@ typedef int (*actuate_f)(struct actuator *act);
  */
 typedef struct actuator {
     act_id_e id;   /* The unique numeric ID of the actuator */
+    bool state;    /* The actuator state, true being on and false being off*/
     actuate_f on;  /* Function to turn the actuator on. */
     actuate_f off; /* Function to turn the actuator off. */
     void *priv;    /* Any private information needed by the actuator control functions */
 } actuator_t;
 
-void actuator_controllers_init();
 int actuator_on(actuator_t *act);
 int actuator_off(actuator_t *act);
 void actuator_init(actuator_t *act, uint8_t id, actuate_f on, actuate_f off, void *priv);
-int actuator_set(padstate_t *state, uint8_t id, bool new_state);
+int actuator_set(actuator_t actuator, bool new_state);
 // const char *actuator_name(actuator_t *act); Conflicts with state.h, commenting for now. - Tony
 
 #endif // _ACTUATOR_H_
