@@ -78,17 +78,28 @@ void handle_term(int sig) {
 }
 
 int main(int argc, char **argv) {
+    char *ip = "127.0.0.1";
     pad.sock = -1;
 
     /* Parse command line options. */
 
     int c;
-    while ((c = getopt(argc, argv, ":p:h")) != -1) {
+    while ((c = getopt(argc, argv, ":a:p:h")) != -1) {
         switch (c) {
         case 'h':
             puts(HELP_TEXT);
             exit(EXIT_SUCCESS);
             break;
+
+        case 'a':
+            ip = optarg;
+            struct in_addr temp_addr;
+            if (inet_pton(AF_INET, ip, &temp_addr) != 1) {
+                fprintf(stderr, "Invalid pad_server address %s\n", ip);
+                exit(EXIT_FAILURE);
+            }
+            break;
+
         case 'p':
             port = atoi(optarg);
             break;
@@ -106,7 +117,7 @@ int main(int argc, char **argv) {
     char key;
     for (;;) {
         fprintf(stderr, "Waiting for pad...\n");
-        err = pad_init(&pad, "127.0.0.1", port);
+        err = pad_init(&pad, ip, port);
         if (err) {
             fprintf(stderr, "Could not initialize pad server with error: %s\n", strerror(err));
             exit(EXIT_FAILURE);

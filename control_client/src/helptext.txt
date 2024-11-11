@@ -9,6 +9,8 @@ USAGE:
 
 OPTIONS:
     -p port     Specify the port number to connect to.
+    -a addr     The pad_server address to connect to. If not
+                specified address 127.0.0.1 is used.
 
 EXAMPLES:
     control -p 1984
