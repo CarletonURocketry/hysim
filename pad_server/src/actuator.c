@@ -40,14 +40,41 @@ void actuator_init(actuator_t *act, uint8_t id, actuate_f on, actuate_f off, voi
  * @param act The actuator to turn on.
  * @return 0 for success, an error code on failure.
  */
-int actuator_on(actuator_t *act) { return act->on(act); }
+int actuator_on(actuator_t *act) {
+    int err = act->on(act);
+    if (err == -1) {
+        return err;
+    }
+    act->state = true;
+    return 0;
+}
 
 /*
  * Turn the actuator off.
  * @param act The actuator to turn off.
  * @return 0 for an error code on failure.
  */
-int actuator_off(actuator_t *act) { return act->off(act); }
+int actuator_off(actuator_t *act) {
+    int err = act->off(act);
+    if (err == -1) {
+        return err;
+    }
+    act->state = false;
+    return 0;
+}
+
+/*
+ * Helper method to set the actuator status
+ * @param act The actuator
+ * @param new_state the new state for said actutator
+ */
+int actuator_set(actuator_t *act, bool new_state) {
+    if (new_state) {
+        return actuator_on(act);
+    } else {
+        return actuator_off(act);
+    }
+}
 
 /*
  * Get the string name of the actuator.
