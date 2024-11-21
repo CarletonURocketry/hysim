@@ -11,7 +11,6 @@
 #include <time.h>
 #include <unistd.h>
 
-#include "state.h"
 #include "telemetry.h"
 
 /* Helper function for returning an error code from a thread */
@@ -153,7 +152,6 @@ static void random_data(telemetry_args_t *args) {
     }
     pthread_cleanup_push(telemetry_cleanup, &telem);
 
-    padstate_t *state = args->state;
     uint32_t time = 0;
     uint32_t pressure = 0;
     uint32_t temperature = 0;
