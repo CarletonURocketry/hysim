@@ -96,9 +96,6 @@ static void telemetry_publish_data(telemetry_sock_t *sock, telem_subtype_e type,
     temp_p temperatureBody = {.id = id, .time = time, .temperature = press_temp_mass};
     mass_p massBody = {.id = id, .time = time, .mass = press_temp_mass};
 
-    arm_lvl_e arm_lvl = padstate_get_level(state);
-    arm_state_p armBody = {.time = time, .state = arm_lvl};
-
     struct iovec pkt[2] = {
         {.iov_base = &hdr, .iov_len = sizeof(hdr)},
     };
@@ -106,12 +103,6 @@ static void telemetry_publish_data(telemetry_sock_t *sock, telem_subtype_e type,
     /*Create the appropriate body base on type*/
     struct iovec tmp;
     switch (type) {
-    case TELEM_ARM: {
-        tmp.iov_base = &armBody;
-        tmp.iov_len = sizeof(armBody);
-        pkt[1] = tmp;
-        break;
-    }
     case TELEM_PRESSURE: {
         tmp.iov_base = &pressureBody;
         tmp.iov_len = sizeof(pressureBody);
