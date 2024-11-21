@@ -11,6 +11,7 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "state.h"
 #include "telemetry.h"
 
 /* Helper function for returning an error code from a thread */
@@ -89,11 +90,14 @@ static void cancel_wrapper(void *arg) { pthread_cancel(*(pthread_t *)(arg)); }
  * @param press_temp_mass The actual data being sent, could be pressure, temperatur or mass
  */
 static void telemetry_publish_data(telemetry_sock_t *sock, telem_subtype_e type, uint8_t id, uint32_t time,
-                                   uint32_t press_temp_mass) {
+                                   uint32_t press_temp_mass, padstate_t *state) {
     header_p hdr = {.type = TYPE_TELEM, .subtype = type};
     pressure_p pressureBody = {.id = id, .time = time, .pressure = press_temp_mass};
     temp_p temperatureBody = {.id = id, .time = time, .temperature = press_temp_mass};
     mass_p massBody = {.id = id, .time = time, .mass = press_temp_mass};
+
+    arm_lvl_e arm_lvl = padstate_get_level(state);
+    arm_state_p armBody = {.time = time, .state = arm_lvl};
 
     struct iovec pkt[2] = {
         {.iov_base = &hdr, .iov_len = sizeof(hdr)},
@@ -102,6 +106,12 @@ static void telemetry_publish_data(telemetry_sock_t *sock, telem_subtype_e type,
     /*Create the appropriate body base on type*/
     struct iovec tmp;
     switch (type) {
+    case TELEM_ARM: {
+        tmp.iov_base = &armBody;
+        tmp.iov_len = sizeof(armBody);
+        pkt[1] = tmp;
+        break;
+    }
     case TELEM_PRESSURE: {
         tmp.iov_base = &pressureBody;
         tmp.iov_len = sizeof(pressureBody);
@@ -152,6 +162,7 @@ static void random_data(telemetry_args_t *args) {
     }
     pthread_cleanup_push(telemetry_cleanup, &telem);
 
+    padstate_t *state = args->state;
     uint32_t time = 0;
     uint32_t pressure = 0;
     uint32_t temperature = 0;
@@ -159,19 +170,21 @@ static void random_data(telemetry_args_t *args) {
     /* Start transmitting telemetry to active clients */
     for (;;) {
         pressure = (pressure + 1) % 255;
-        telemetry_publish_data(&telem, TELEM_PRESSURE, 1, time, 100 + pressure * 10);
-        telemetry_publish_data(&telem, TELEM_PRESSURE, 2, time, 200 + pressure * 20);
-        telemetry_publish_data(&telem, TELEM_PRESSURE, 3, time, 300 + pressure * 30);
-        telemetry_publish_data(&telem, TELEM_PRESSURE, 4, time, 250 + pressure * 40);
+        telemetry_publish_data(&telem, TELEM_PRESSURE, 1, time, 100 + pressure * 10, state);
+        telemetry_publish_data(&telem, TELEM_PRESSURE, 2, time, 200 + pressure * 20, state);
+        telemetry_publish_data(&telem, TELEM_PRESSURE, 3, time, 300 + pressure * 30, state);
+        telemetry_publish_data(&telem, TELEM_PRESSURE, 4, time, 250 + pressure * 40, state);
 
         temperature = (temperature + 1) % 20 + 20;
-        telemetry_publish_data(&telem, TELEM_TEMP, 1, time, temperature - 1);
-        telemetry_publish_data(&telem, TELEM_TEMP, 2, time, temperature + 1);
-        telemetry_publish_data(&telem, TELEM_TEMP, 3, time, temperature - 2);
-        telemetry_publish_data(&telem, TELEM_TEMP, 4, time, temperature + 2);
+        telemetry_publish_data(&telem, TELEM_TEMP, 1, time, temperature - 1, state);
+        telemetry_publish_data(&telem, TELEM_TEMP, 2, time, temperature + 1, state);
+        telemetry_publish_data(&telem, TELEM_TEMP, 3, time, temperature - 2, state);
+        telemetry_publish_data(&telem, TELEM_TEMP, 4, time, temperature + 2, state);
 
         mass = (mass + 10) % 4000 + 3900;
-        telemetry_publish_data(&telem, TELEM_MASS, 1, time, temperature + 2);
+        telemetry_publish_data(&telem, TELEM_MASS, 1, time, temperature + 2, state);
+
+        telemetry_publish_data(&telem, TELEM_ARM, 1, time, UINT32_MAX, state);
 
         time = (time + 1) % 1000000;
         usleep(1000);

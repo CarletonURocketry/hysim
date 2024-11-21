@@ -78,7 +78,7 @@ int main(int argc, char **argv) {
     header_p hdr;
     ssize_t b_read;
     for (;;) {
-        b_read = stream_recv(&telem_stream, &hdr, sizeof(hdr));
+        b_read = stream_recv(&telem_stream, &hdr, sizeof(hdr), MSG_PEEK);
 
         if (b_read == 0) {
             stream_over();
@@ -99,34 +99,53 @@ int main(int argc, char **argv) {
         // TODO: do something with b_read here
         switch ((telem_subtype_e)hdr.subtype) {
         case TELEM_TEMP: {
-            temp_p temp;
-            b_read = stream_recv(&telem_stream, &temp, sizeof(temp));
-            printf("Thermocouple #%u: %d C @ %u ms\n", temp.id, temp.temperature / 1000, temp.time);
+            /* buffer the size of the hdr + body */
+            char buffer[sizeof(temp_p) + sizeof(hdr)];
+            b_read = stream_recv(&telem_stream, &buffer, sizeof(buffer), 0);
+            /* Make a struct from the packet data, removing the header*/
+            temp_p *temp = (temp_p *)&buffer[sizeof(hdr)];
+
+            printf("Thermocouple #%u: %d C @ %u ms\n", temp->id, temp->temperature / 1000, temp->time);
         } break;
         case TELEM_PRESSURE: {
-            pressure_p pres;
-            b_read = stream_recv(&telem_stream, &pres, sizeof(pres));
-            printf("Pressure transducer #%u: %u PSI @ %u ms\n", pres.id, pres.pressure / 1000, pres.time);
+            char buffer[sizeof(pressure_p) + sizeof(hdr)];
+            b_read = stream_recv(&telem_stream, &buffer, sizeof(buffer), 0);
+
+            pressure_p *pres = (pressure_p *)&buffer[sizeof(hdr)];
+
+            printf("Pressure transducer #%u: %u PSI @ %u ms\n", pres->id, pres->pressure / 1000, pres->time);
         } break;
         case TELEM_MASS: {
-            mass_p mass;
-            b_read = stream_recv(&telem_stream, &mass, sizeof(mass));
-            printf("Load cell #%u: %u kg @ %u ms\n", mass.id, mass.mass / 1000, mass.time);
+            char buffer[sizeof(mass_p) + sizeof(hdr)];
+            b_read = stream_recv(&telem_stream, &buffer, sizeof(buffer), 0);
+
+            mass_p *mass = (mass_p *)&buffer[sizeof(hdr)];
+
+            printf("Load cell #%u: %u kg @ %u ms\n", mass->id, mass->mass / 1000, mass->time);
         } break;
         case TELEM_ACT: {
-            act_state_p act;
-            b_read = stream_recv(&telem_stream, &act, sizeof(act));
-            printf("Actuator #%u: %s @ %u ms\n", act.id, act.state ? "on" : "off", act.time);
+            char buffer[sizeof(act_state_p) + sizeof(hdr)];
+            b_read = stream_recv(&telem_stream, &buffer, sizeof(buffer), 0);
+
+            act_state_p *act = (act_state_p *)&buffer[sizeof(hdr)];
+
+            printf("Actuator #%u: %s @ %u ms\n", act->id, act->state ? "on" : "off", act->time);
         } break;
         case TELEM_ARM: {
-            arm_state_p arm;
-            b_read = stream_recv(&telem_stream, &arm, sizeof(arm));
-            printf("Arming state change to: %s # %u ms\n", arm_state_str(arm.state), arm.time);
+            char buffer[sizeof(arm_state_p) + sizeof(hdr)];
+            b_read = stream_recv(&telem_stream, &buffer, sizeof(buffer), 0);
+
+            arm_state_p *arm = (arm_state_p *)&buffer[sizeof(hdr)];
+
+            printf("Arming state: %s # %u ms\n", arm_state_str(arm->state), arm->time);
         } break;
         case TELEM_WARN: {
-            warn_p warn;
-            b_read = stream_recv(&telem_stream, &warn, sizeof(warn));
-            printf("WARNING: %s # %u ms\n", warning_str(warn.type), warn.time);
+            char buffer[sizeof(warn_p) + sizeof(hdr)];
+            b_read = stream_recv(&telem_stream, &buffer, sizeof(buffer), 0);
+
+            warn_p *warn = (warn_p *)&buffer[sizeof(hdr)];
+
+            printf("WARNING: %s # %u ms\n", warning_str(warn->type), warn->time);
         } break;
         }
     }
