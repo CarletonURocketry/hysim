@@ -21,27 +21,27 @@ int change_arm_level(padstate_t *state, arm_lvl_e new_arm) {
     }
 
     int err;
+    /* Arming state read before */
+    arm_lvl_e current_arm = padstate_get_level(state);
 
-    arm_lvl_e current_arm;
-    err = padstate_get_level(state, &current_arm);
-    if (err) {
-        errno = err;
-        return -1;
-    }
+    do {
+        bool lvl_increase = new_arm > current_arm && new_arm <= ARMED_LAUNCH;
+        bool lvl_decrease_from_armed_valves = current_arm == ARMED_VALVES && new_arm == ARMED_PAD;
+        bool lvl_decrease_from_firing_sequence =
+            new_arm == ARMED_VALVES &&
+            (current_arm == ARMED_IGNITION || current_arm == ARMED_DISCONNECTED || current_arm == ARMED_LAUNCH);
 
-    bool lvl_increase = new_arm > current_arm && new_arm <= ARMED_LAUNCH;
-    bool lvl_decrease_from_armed_valves = current_arm == ARMED_VALVES && new_arm == ARMED_PAD;
-    bool lvl_decrease_from_firing_sequence =
-        new_arm == ARMED_VALVES &&
-        (current_arm == ARMED_IGNITION || current_arm == ARMED_DISCONNECTED || current_arm == ARMED_LAUNCH);
+        if (lvl_increase || lvl_decrease_from_armed_valves || lvl_decrease_from_firing_sequence) {
+            /* Returns 1 on success, 0 on failure */
+            err = padstate_change_level(state, &current_arm, new_arm);
+            /* In case of failure, it means some other thread changed the arming level without us knowing, try to rerun
+             * all the checks. An alternative would be to don't even try again, and just return denied, but I haven't
+             * thought about that fully yet.*/
 
-    if (lvl_increase || lvl_decrease_from_armed_valves || lvl_decrease_from_firing_sequence) {
-        err = padstate_change_level(state, new_arm);
-        if (err) {
-            errno = err;
-            return -1;
+        } else {
+            return ARM_DENIED;
         }
-        return ARM_OK;
-    }
-    return ARM_DENIED;
+    } while (!err);
+
+    return ARM_OK;
 }
