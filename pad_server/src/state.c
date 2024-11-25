@@ -32,17 +32,18 @@ void padstate_init(padstate_t *state) {
  *
  */
 arm_lvl_e padstate_get_level(padstate_t *state) {
-    /* This doesn't return any errors, bad! */
+    /* Something has gone terribly wrong if reading a variable doesn't work, so no errors are returned from here */
     return atomic_load_explicit(&state->arm_level, __ATOMIC_ACQUIRE);
 }
 
 /* TODO: docs
  * NOTE: this does not check for valid arming state transitions
+ * NOTE: use in a loop, see arm.c for an example and why
  * @return 1 for success, 0 for error
  */
 int padstate_change_level(padstate_t *state, arm_lvl_e *old_arm, arm_lvl_e new_arm) {
-    return atomic_compare_exchange_strong_explicit(&state->arm_level, old_arm, new_arm, memory_order_release,
-                                                   memory_order_acquire);
+    return atomic_compare_exchange_weak_explicit(&state->arm_level, old_arm, new_arm, memory_order_release,
+                                                 memory_order_acquire);
 }
 
 /*

@@ -34,10 +34,8 @@ int change_arm_level(padstate_t *state, arm_lvl_e new_arm) {
         if (lvl_increase || lvl_decrease_from_armed_valves || lvl_decrease_from_firing_sequence) {
             /* Returns 1 on success, 0 on failure */
             err = padstate_change_level(state, &current_arm, new_arm);
-            /* In case of failure, it means some other thread changed the arming level without us knowing, try to rerun
-             * all the checks. An alternative would be to don't even try again, and just return denied, but I haven't
-             * thought about that fully yet.*/
-
+            /* In case of failure, it means some other thread changed the arming level without us knowing or the checked
+             * failed spuriously, try to rerun all the checks and set it again. */
         } else {
             return ARM_DENIED;
         }
