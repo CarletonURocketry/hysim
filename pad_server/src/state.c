@@ -1,6 +1,7 @@
 #include <errno.h>
 #include <pthread.h>
 #include <semaphore.h>
+#include <stdatomic.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -60,7 +61,8 @@ int padstate_change_level(padstate_t *state, arm_lvl_e new_arm) {
  * @return 0 for success, -1 for error
  */
 int padstate_actuate(padstate_t *state, uint8_t id, bool new_state) {
-    state->actuators[id].state = new_state;
+    if (id >= NUM_ACTUATORS) return -1;
+    atomic_store(&state->actuators[id].state, new_state);
     return 0;
 }
 
@@ -73,7 +75,7 @@ int padstate_actuate(padstate_t *state, uint8_t id, bool new_state) {
 int padstate_get_actstate(padstate_t *state, uint8_t act_id, bool *act_state) {
     if (act_id >= NUM_ACTUATORS) return -1;
 
-    *act_state = state->actuators[act_id].state;
+    *act_state = atomic_load(&state->actuators[act_id].state);
     return 0;
 }
 
