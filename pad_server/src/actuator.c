@@ -1,4 +1,5 @@
 #include "state.h"
+#include <stdatomic.h>
 #include <stdint.h>
 
 /* String names of the actuators. */
@@ -29,7 +30,7 @@ static const char *ACTUATOR_STR[] = {
  */
 void actuator_init(actuator_t *act, uint8_t id, actuate_f on, actuate_f off, void *priv) {
     act->id = id;
-    act->state = false;
+    act->state = ATOMIC_VAR_INIT(false);
     act->on = on;
     act->off = off;
     act->priv = priv;
@@ -45,7 +46,7 @@ int actuator_on(actuator_t *act) {
     if (err == -1) {
         return err;
     }
-    act->state = true;
+    atomic_store(&act->state, true);
     return 0;
 }
 
@@ -59,7 +60,7 @@ int actuator_off(actuator_t *act) {
     if (err == -1) {
         return err;
     }
-    act->state = false;
+    atomic_store(&act->state, false);
     return 0;
 }
 
