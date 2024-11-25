@@ -7,9 +7,9 @@
 #include <unistd.h>
 
 #include "../../packets/packet.h"
-#include "actuator.h"
 #include "arm.h"
 #include "controller.h"
+#include "state.h"
 
 /* Helper function for returning an error code from a thread */
 #define thread_return(e) pthread_exit((void *)(unsigned long)((e)))
@@ -196,21 +196,37 @@ void *controller_run(void *arg) {
 
                 case CNTRL_ACT_REQ: {
                     act_req_p req;
+
                     controller_recv(&controller, &req, sizeof(req)); // TODO: handle recv errors
                     printf("Received actuator request for ID #%u and state %s.\n", req.id, req.state ? "on" : "off");
-                    /*
-                    if (req.id == ID_QUICK_DISCONNECT) {
-                        err = change_arm_level(args->state, ARMED_DISCONNECTED, CNTRL_ACT_REQ);
-                        if (err) fprintf(stderr, "Could not change arm level with error: %d\n", err);
-                    } else if (req.id == ID_IGNITER) {
-                        err = change_arm_level(args->state, ARMED_LAUNCH, CNTRL_ACT_REQ);
-                        if (err) fprintf(stderr, "Could not change arm level with error: %d\n", err);
-                    }
-                    */
 
-                    // TODO: change the appropriate acknowledgement for each error status
-                    act_ack_p ack = {.id = req.id, .status = ACT_OK};
-                    controller_send(&controller, &ack, sizeof(ack));
+                    err = pad_actuate(args->state, req.id, req.state);
+                    if (err == -1) {
+                        fprintf(stderr, "Could not modify the actuator with error: %s\n", strerror(errno));
+                        break;
+                    } else {
+                        switch (err) {
+                        case ACT_OK:
+                            fprintf(stderr, "Actuator with id %d was put in state %d\n", req.id, req.state);
+                            break;
+
+                        case ACT_DNE:
+                            fprintf(stderr, "%d is not a valid actuator id\n", req.id);
+                            break;
+
+                        case ACT_INV:
+                            fprintf(stderr, "%d is not a valid state for actuator with id %d\n", req.state, req.id);
+                            break;
+
+                        case ACT_DENIED:
+                            fprintf(stderr, "The current arming level is too low to operate actuator with id %d\n",
+                                    req.id);
+                            break;
+                        }
+
+                        act_ack_p ack = {.id = req.id, .status = err};
+                        controller_send(&controller, &ack, sizeof(ack));
+                    }
 
                 } break;
                 case CNTRL_ARM_REQ: {
@@ -218,7 +234,7 @@ void *controller_run(void *arg) {
                     controller_recv(&controller, &req, sizeof(req)); // TODO: handle recv errors
                     printf("Received arming state %u.\n", req.level);
 
-                    err = change_arm_level(args->state, req.level, CNTRL_ARM_REQ);
+                    err = change_arm_level(args->state, req.level);
                     arm_ack_p ack;
 
                     switch (err) {

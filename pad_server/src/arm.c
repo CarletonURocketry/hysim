@@ -15,30 +15,33 @@
  * @return ARM_OK for success, ARM_INV or ARM_DENIED for invalid or out of order arming state, and -1 on error, setting
  * ERRNO.
  */
-int change_arm_level(padstate_t *state, arm_lvl_e new_arm, cntrl_subtype_e cmd_src) {
+int change_arm_level(padstate_t *state, arm_lvl_e new_arm) {
     if (new_arm > ARMED_LAUNCH || new_arm < ARMED_PAD) {
         return ARM_INV;
     }
 
     int err;
 
-    arm_lvl_e current_state;
-    err = padstate_get_level(state, &current_state);
+    arm_lvl_e current_arm;
+    err = padstate_get_level(state, &current_arm);
     if (err) {
         errno = err;
         return -1;
     }
 
-    if ((current_state + 1 == new_arm && new_arm >= ARMED_DISCONNECTED && cmd_src == CNTRL_ACT_REQ) ||
-        (current_state + 1 == new_arm && new_arm < ARMED_DISCONNECTED && cmd_src == CNTRL_ARM_REQ)) {
+    bool lvl_increase = new_arm > current_arm && new_arm <= ARMED_LAUNCH;
+    bool lvl_decrease_from_armed_valves = current_arm == ARMED_VALVES && new_arm == ARMED_PAD;
+    bool lvl_decrease_from_firing_sequence =
+        new_arm == ARMED_VALVES &&
+        (current_arm == ARMED_IGNITION || current_arm == ARMED_DISCONNECTED || current_arm == ARMED_LAUNCH);
+
+    if (lvl_increase || lvl_decrease_from_armed_valves || lvl_decrease_from_firing_sequence) {
         err = padstate_change_level(state, new_arm);
         if (err) {
             errno = err;
             return -1;
         }
-    } else {
-        return ARM_DENIED;
+        return ARM_OK;
     }
-
-    return ARM_OK;
+    return ARM_DENIED;
 }

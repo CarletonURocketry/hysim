@@ -1,4 +1,5 @@
-#include "actuator.h"
+#include "state.h"
+#include <stdint.h>
 
 /* String names of the actuators. */
 static const char *ACTUATOR_STR[] = {
@@ -28,6 +29,7 @@ static const char *ACTUATOR_STR[] = {
  */
 void actuator_init(actuator_t *act, uint8_t id, actuate_f on, actuate_f off, void *priv) {
     act->id = id;
+    act->state = false;
     act->on = on;
     act->off = off;
     act->priv = priv;
@@ -43,7 +45,7 @@ int actuator_on(actuator_t *act) { return act->on(act); }
 /*
  * Turn the actuator off.
  * @param act The actuator to turn off.
- * @return 0 for success, an error code on failure.
+ * @return 0 for an error code on failure.
  */
 int actuator_off(actuator_t *act) { return act->off(act); }
 
@@ -52,4 +54,4 @@ int actuator_off(actuator_t *act) { return act->off(act); }
  * @param act The actuator to get the string name of.
  * @return The string name of the actuator.
  */
-const char *actuator_name(actuator_t *act) { return ACTUATOR_STR[act->id]; }
+const char *actuator_get_name(actuator_t *act) { return ACTUATOR_STR[act->id]; }

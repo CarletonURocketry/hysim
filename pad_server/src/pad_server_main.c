@@ -10,6 +10,7 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "actuator.h"
 #include "controller.h"
 #include "helptext/helptext.h"
 #include "state.h"
