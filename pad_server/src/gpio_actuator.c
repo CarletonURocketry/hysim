@@ -1,8 +1,8 @@
 #include "gpio_actuator.h"
-#include "include/nuttx/ioexpander/gpio.h"
 #include "stdio.h"
 #include <errno.h>
 #include <fcntl.h>
+#include <nuttx/ioexpander/gpio.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
 
