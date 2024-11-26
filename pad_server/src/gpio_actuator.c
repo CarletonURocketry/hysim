@@ -7,6 +7,7 @@
 #include <unistd.h>
 
 int gpio_actuator_on(actuator_t *act) {
+    // TODO: change the device to be actuator specific
     int fd = open("/dev/gpio12", O_RDWR);
     if (fd < 0) {
         fprintf(stderr, "Failed to open gpio with err %d\n", errno);
@@ -24,11 +25,12 @@ int gpio_actuator_on(actuator_t *act) {
         return -1;
     }
 
-    printf("Actuator #%d turned on\n", act->id);
+    fprintf(stdout, "Actuator #%d turned on\n", act->id);
     return 0;
 }
 
 int gpio_actuator_off(actuator_t *act) {
+    // TODO: change the device to be actuator specific
     int fd = open("/dev/gpio12", O_RDWR);
     if (fd < 0) {
         fprintf(stderr, "Failed to open gpio with err %d\n", errno);
@@ -46,6 +48,6 @@ int gpio_actuator_off(actuator_t *act) {
         return -1;
     }
 
-    printf("Actuator #%d turned off\n", act->id);
+    fprintf(stdout, "Actuator #%d turned off\n", act->id);
     return 0;
 }
