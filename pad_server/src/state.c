@@ -55,9 +55,9 @@ int padstate_change_level(padstate_t *state, arm_lvl_e new_arm) {
 }
 
 /*
- * Changes the state of the actuator, no checks are done
+ * Obtains state of actuator given id using
  * @param id The actuator id
- * @param new_state The new actuator state
+ * @param act_state Variable to store actuator state
  * @return 0 for success, -1 for error
  */
 int padstate_get_actstate(padstate_t *state, uint8_t act_id, bool *act_state) {
