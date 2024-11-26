@@ -1,4 +1,5 @@
 #include <errno.h>
+#include <fcntl.h>
 #include <pthread.h>
 #include <semaphore.h>
 #include <stdbool.h>
@@ -7,12 +8,38 @@
 
 #include "actuator.h"
 #include "state.h"
+#include <sys/ioctl.h>
+
+// defined in include/nuttx/ioexpander/gpio.h
+#define GPIOC_WRITE 8961
 
 static int dummy_on(actuator_t *act) {
+    int fd = open("/dev/gpio12", O_RDWR);
+    if (fd < 0) {
+        fprintf(stderr, "Opening gpio failed with err %d\n", errno);
+        return -1;
+    }
+    int err = ioctl(fd, GPIOC_WRITE, true);
+    if (err < 0) {
+        fprintf(stderr, "Ioctl failed with err %d\n", errno);
+        return -1;
+    }
+
     printf("Actuator #%d turned on\n", act->id);
     return 0;
 }
 static int dummy_off(actuator_t *act) {
+    int fd = open("/dev/gpio12", O_RDWR);
+    if (fd < 0) {
+        fprintf(stderr, "Opening gpio failed with err %d\n", errno);
+        return -1;
+    }
+    int err = ioctl(fd, GPIOC_WRITE, false);
+    if (err < 0) {
+        fprintf(stderr, "Ioctl failed with err %d\n", errno);
+        return -1;
+    }
+
     printf("Actuator #%d turned off\n", act->id);
     return 0;
 }
