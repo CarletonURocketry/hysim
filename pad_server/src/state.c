@@ -1,6 +1,7 @@
 #include <errno.h>
 #include <pthread.h>
 #include <semaphore.h>
+#include <stdatomic.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -46,31 +47,16 @@ int padstate_change_level(padstate_t *state, arm_lvl_e new_arm) {
 }
 
 /*
- * Changes the state of the actuator in a thread safe way, no checks are done
+ * Obtains state of actuator given id using
  * @param id The actuator id
- * @param new_state The new actuator state
+ * @param act_state Variable to store actuator state
  * @return 0 for success, -1 for error
  */
-int padstate_actuate(padstate_t *state, uint8_t id, bool new_state) {
-    int err;
-    err = pthread_rwlock_wrlock(&state->rw_lock);
-    if (err) return err;
-
-    state->actuators[id].state = new_state;
-
-    return pthread_rwlock_unlock(&state->rw_lock);
-}
-
 int padstate_get_actstate(padstate_t *state, uint8_t act_id, bool *act_state) {
     if (act_id >= NUM_ACTUATORS) return -1;
 
-    int err;
-    err = pthread_rwlock_rdlock(&state->rw_lock);
-    if (err) return err;
-
-    *act_state = state->actuators[act_id].state;
-
-    return pthread_rwlock_unlock(&state->rw_lock);
+    *act_state = atomic_load(&state->actuators[act_id].state);
+    return 0;
 }
 
 /*
@@ -93,10 +79,7 @@ int pad_actuate(padstate_t *state, uint8_t id, uint8_t req_state) {
         return -1;
     }
 
-    fprintf(stderr, "arming level: %d\n", arm_lvl);
-
     bool is_solenoid_valve = id >= ID_XV1 && id <= ID_XV12;
-    fprintf(stderr, "%ul\n", arm_lvl);
 
     switch (arm_lvl) {
     case ARMED_PAD:
@@ -137,17 +120,8 @@ int pad_actuate(padstate_t *state, uint8_t id, uint8_t req_state) {
         return ACT_OK;
     }
 
-    err = padstate_actuate(state, id, new_state);
-    if (err) {
-        errno = err;
-        return -1;
-    }
+    err = actuator_set(&state->actuators[id], new_state);
 
-    if (new_state == true) {
-        err = actuator_on(&state->actuators[id]);
-    } else {
-        err = actuator_off(&state->actuators[id]);
-    }
     if (err) {
         return -1;
     }
