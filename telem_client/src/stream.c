@@ -64,7 +64,7 @@ int stream_disconnect(stream_t *stream) {
  * Receive bytes from the telemetry upstream.
  * TODO: docs
  */
-ssize_t stream_recv(stream_t *stream, void *buf, size_t n) {
+ssize_t stream_recv(stream_t *stream, void *buf, size_t n, int flag) {
     socklen_t size = sizeof(stream->addr);
-    return recvfrom(stream->sock, buf, n, 0, (struct sockaddr *)&stream->addr, &size);
+    return recvfrom(stream->sock, buf, n, flag, (struct sockaddr *)&stream->addr, &size);
 }

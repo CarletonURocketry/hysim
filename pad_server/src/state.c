@@ -47,21 +47,9 @@ int padstate_change_level(padstate_t *state, arm_lvl_e *old_arm, arm_lvl_e new_a
 }
 
 /*
- * Changes the state of the actuator, no checks are done
+ * Obtains state of actuator given id using
  * @param id The actuator id
- * @param new_state The new actuator state
- * @return 0 for success, -1 for error
- */
-int padstate_actuate(padstate_t *state, uint8_t id, bool new_state) {
-    if (id >= NUM_ACTUATORS) return -1;
-    atomic_store(&state->actuators[id].state, new_state);
-    return 0;
-}
-
-/*
- * Changes the state of the actuator, no checks are done
- * @param id The actuator id
- * @param new_state The new actuator state
+ * @param act_state Variable to store actuator state
  * @return 0 for success, -1 for error
  */
 int padstate_get_actstate(padstate_t *state, uint8_t act_id, bool *act_state) {
