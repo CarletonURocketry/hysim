@@ -6,16 +6,8 @@
 #include <stdio.h>
 
 #include "actuator.h"
+#include "gpio_actuator.h"
 #include "state.h"
-
-static int dummy_on(actuator_t *act) {
-    printf("Actuator #%d turned on\n", act->id);
-    return 0;
-}
-static int dummy_off(actuator_t *act) {
-    printf("Actuator #%d turned off\n", act->id);
-    return 0;
-}
 
 /* TODO: docs */
 void padstate_init(padstate_t *state) {
@@ -23,7 +15,7 @@ void padstate_init(padstate_t *state) {
     // TODO: Is this right? Can we assume if the program is running then the pad is armed?
     state->arm_level = ARMED_PAD;
     for (unsigned int i = 0; i < NUM_ACTUATORS; i++) {
-        actuator_init(&state->actuators[i], i, dummy_on, dummy_off, NULL);
+        actuator_init(&state->actuators[i], i, gpio_actuator_on, gpio_actuator_off, NULL);
     }
 }
 
