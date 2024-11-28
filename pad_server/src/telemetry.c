@@ -1,6 +1,5 @@
 #include <arpa/inet.h>
 #include <assert.h>
-#include <bits/time.h>
 #include <errno.h>
 #include <pthread.h>
 #include <stdint.h>
@@ -255,7 +254,7 @@ void *telemetry_run(void *arg) {
     pthread_cleanup_pop(1);
 }
 
-void *telemetry_send_padsate(void *arg) {
+void *telemetry_send_padstate(void *arg) {
     telemetry_padstate_args_t *args = (telemetry_padstate_args_t *)arg;
 
     for (;;) {
