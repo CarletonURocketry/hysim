@@ -8,6 +8,12 @@
 
 #define MAX_TELEMETRY 5
 
+/* The main telemetry socket */
+typedef struct {
+    int sock;
+    struct sockaddr_in addr;
+} telemetry_sock_t;
+
 typedef struct {
     padstate_t *state;
     uint16_t port;
@@ -16,5 +22,6 @@ typedef struct {
 } telemetry_args_t;
 
 void *telemetry_run(void *arg);
+void telemetry_send_padstate(telemetry_sock_t *sock, padstate_t *state);
 
 #endif // _TELEMETRY_H_

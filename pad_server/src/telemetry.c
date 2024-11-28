@@ -11,16 +11,11 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "state.h"
 #include "telemetry.h"
 
 /* Helper function for returning an error code from a thread */
 #define thread_return(e) pthread_exit((void *)(unsigned long)((e)))
-
-/* The main telemetry socket */
-typedef struct {
-    int sock;
-    struct sockaddr_in addr;
-} telemetry_sock_t;
 
 /*
  * Set up the telemetry socket for connection.
@@ -174,7 +169,8 @@ static void random_data(telemetry_args_t *args) {
         telemetry_publish_data(&telem, TELEM_MASS, 1, time, temperature + 2);
 
         time = (time + 1) % 1000000;
-        usleep(1000);
+        telemetry_send_padstate(&telem, args->state);
+        usleep(1000000);
     }
 
     thread_return(0);
@@ -260,11 +256,63 @@ void *telemetry_run(void *arg) {
             .msg_flags = 0,
         };
         telemetry_publish(&telem, &msg);
-
-        usleep(1000);
+        telemetry_send_padstate(&telem, args->state);
+        usleep(1000000);
     }
 
     thread_return(0); // Normal return
 
     pthread_cleanup_pop(1);
+}
+
+void telemetry_send_padstate(telemetry_sock_t *sock, padstate_t *state) {
+    struct timespec time;
+    clock_gettime(CLOCK_MONOTONIC, &time);
+    uint32_t time_ms = time.tv_sec * 1000 + time.tv_nsec / 1000000;
+
+    for (int i = 0; i < NUM_ACTUATORS; i++) {
+        header_p hdr = {.type = TYPE_TELEM, .subtype = TELEM_ACT};
+        bool act_state;
+        padstate_get_actstate(state, i, &act_state);
+
+        act_state_p body = {.time = time_ms, .id = i, .state = act_state};
+
+        /* Send data to all clients. */
+        struct iovec pkt[2] = {
+            {.iov_base = &hdr, .iov_len = sizeof(hdr)},
+            {.iov_base = &body, .iov_len = sizeof(body)},
+        };
+        struct msghdr msg = {
+            .msg_name = NULL,
+            .msg_namelen = 0,
+            .msg_iov = pkt,
+            .msg_iovlen = (sizeof(pkt) / sizeof(struct iovec)),
+            .msg_control = NULL,
+            .msg_controllen = 0,
+            .msg_flags = 0,
+        };
+        telemetry_publish(sock, &msg);
+    }
+
+    header_p hdr = {.type = TYPE_TELEM, .subtype = TELEM_ARM};
+    arm_lvl_e arm_lvl;
+    padstate_get_level(state, &arm_lvl);
+
+    arm_state_p body = {.time = time_ms, .state = arm_lvl};
+
+    /* Send data to all clients. */
+    struct iovec pkt[2] = {
+        {.iov_base = &hdr, .iov_len = sizeof(hdr)},
+        {.iov_base = &body, .iov_len = sizeof(body)},
+    };
+    struct msghdr msg = {
+        .msg_name = NULL,
+        .msg_namelen = 0,
+        .msg_iov = pkt,
+        .msg_iovlen = (sizeof(pkt) / sizeof(struct iovec)),
+        .msg_control = NULL,
+        .msg_controllen = 0,
+        .msg_flags = 0,
+    };
+    telemetry_publish(sock, &msg);
 }
