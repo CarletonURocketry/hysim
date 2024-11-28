@@ -27,11 +27,6 @@ typedef struct {
     char *data_file;
 } telemetry_args_t;
 
-typedef struct {
-    telemetry_sock_t *sock;
-    pthread_t telemetry_padstate;
-} telemetry_cancel_args_t;
-
 void *telemetry_run(void *arg);
 void *telemetry_send_padstate(void *arg);
 

@@ -43,10 +43,8 @@ static int telemetry_init(telemetry_sock_t *sock, uint16_t port, char *addr) {
  * @return 0 on success, error code on error.
  */
 static int telemetry_close(telemetry_sock_t *sock) {
-    if (sock->sock >= 0) {
-        if (close(sock->sock) < 0) {
-            return errno;
-        }
+    if (close(sock->sock) < 0) {
+        return errno;
     }
     return 0;
 }
@@ -69,14 +67,14 @@ static int telemetry_publish(telemetry_sock_t *sock, struct msghdr *msg) {
  * @param arg A pointer to a telemetry socket.
  * @return 0 on success, error code on error.
  */
-static void telemetry_cleanup(void *arg) {
-    telemetry_cancel_args_t *args = (telemetry_cancel_args_t *)arg;
+static void telemetry_cleanup(void *arg) { telemetry_close((telemetry_sock_t *)(arg)); }
 
-    pthread_cancel(args->telemetry_padstate);
-    pthread_join(args->telemetry_padstate, NULL);
+static void telemetry_cancel_padstate_thread(void *arg) {
+    pthread_t telemetry_padstate_thread = *(pthread_t *)arg;
+
+    pthread_cancel(telemetry_padstate_thread);
+    pthread_join(telemetry_padstate_thread, NULL);
     fprintf(stderr, "Telemetry pad state thread terminated\n");
-
-    telemetry_close((telemetry_sock_t *)(arg));
 }
 
 /*
@@ -188,24 +186,21 @@ void *telemetry_run(void *arg) {
 
     /* Start telemetry socket */
     telemetry_sock_t telem;
-    telem.sock = -1;
     err = telemetry_init(&telem, args->port, args->addr);
     if (err) {
         fprintf(stderr, "Could not start telemetry socket: %s\n", strerror(err));
         thread_return(err);
     }
+    pthread_cleanup_push(telemetry_cleanup, &telem);
 
     pthread_t telemetry_padstate_thread;
-    telemetry_padstate_thread = -1;
     telemetry_padstate_args_t telemetry_padstate_args = {.sock = &telem, .state = args->state};
     err = pthread_create(&telemetry_padstate_thread, NULL, telemetry_send_padstate, &telemetry_padstate_args);
     if (err) {
         fprintf(stderr, "Could not start telemetry padstate sending thread: %s\n", strerror(err));
         thread_return(err);
     }
-
-    telemetry_cancel_args_t telemetry_cancel_args = {.sock = &telem, .telemetry_padstate = telemetry_padstate_thread};
-    pthread_cleanup_push(telemetry_cleanup, &telemetry_cancel_args);
+    pthread_cleanup_push(telemetry_cancel_padstate_thread, &telemetry_padstate_thread);
 
     /* Null telemetry file means nothing to do */
     if (args->data_file == NULL) {
@@ -265,6 +260,7 @@ void *telemetry_run(void *arg) {
 
     thread_return(0); // Normal return
 
+    pthread_cleanup_pop(1);
     pthread_cleanup_pop(1);
 }
 
