@@ -25,9 +25,9 @@ typedef struct {
     act_id_e act_id;
     bool act_val;
     arm_lvl_e arm_lvl;
-} padstate_cond_t;
+} padstate_last_update_t;
 
-extern padstate_cond_t padstate_last_updated;
+extern padstate_last_update_t padstate_last_update;
 
 void padstate_init(padstate_t *state);
 int padstate_get_level(padstate_t *state, arm_lvl_e *arm_val);

@@ -43,8 +43,10 @@ static int telemetry_init(telemetry_sock_t *sock, uint16_t port, char *addr) {
  * @return 0 on success, error code on error.
  */
 static int telemetry_close(telemetry_sock_t *sock) {
-    if (close(sock->sock) < 0) {
-        return errno;
+    if (sock->sock >= 0) {
+        if (close(sock->sock) < 0) {
+            return errno;
+        }
     }
     return 0;
 }
@@ -67,7 +69,15 @@ static int telemetry_publish(telemetry_sock_t *sock, struct msghdr *msg) {
  * @param arg A pointer to a telemetry socket.
  * @return 0 on success, error code on error.
  */
-static void telemetry_cleanup(void *arg) { telemetry_close((telemetry_sock_t *)(arg)); }
+static void telemetry_cleanup(void *arg) {
+    telemetry_cancel_args_t *args = (telemetry_cancel_args_t *)arg;
+
+    pthread_cancel(args->telemetry_padstate);
+    pthread_join(args->telemetry_padstate, NULL);
+    fprintf(stderr, "Telemetry pad state thread terminated\n");
+
+    telemetry_close((telemetry_sock_t *)(arg));
+}
 
 /*
  * Cleanup function to kill a thread.
@@ -178,20 +188,24 @@ void *telemetry_run(void *arg) {
 
     /* Start telemetry socket */
     telemetry_sock_t telem;
+    telem.sock = -1;
     err = telemetry_init(&telem, args->port, args->addr);
     if (err) {
         fprintf(stderr, "Could not start telemetry socket: %s\n", strerror(err));
         thread_return(err);
     }
-    pthread_cleanup_push(telemetry_cleanup, &telem);
 
     pthread_t telemetry_padstate_thread;
+    telemetry_padstate_thread = -1;
     telemetry_padstate_args_t telemetry_padstate_args = {.sock = &telem, .state = args->state};
     err = pthread_create(&telemetry_padstate_thread, NULL, telemetry_send_padstate, &telemetry_padstate_args);
     if (err) {
-        fprintf(stderr, "Could not start telemetry padstate update thread: %s\n", strerror(err));
-        // pthread_cleanup_pop(1);
+        fprintf(stderr, "Could not start telemetry padstate sending thread: %s\n", strerror(err));
+        thread_return(err);
     }
+
+    telemetry_cancel_args_t telemetry_cancel_args = {.sock = &telem, .telemetry_padstate = telemetry_padstate_thread};
+    pthread_cleanup_push(telemetry_cleanup, &telemetry_cancel_args);
 
     /* Null telemetry file means nothing to do */
     if (args->data_file == NULL) {
@@ -296,24 +310,23 @@ void *telemetry_send_padstate(void *arg) {
             telemetry_publish(args->sock, &msg);
         }
 
-        pthread_mutex_lock(&padstate_last_updated.mut);
-
         struct timespec cond_timeout;
         clock_gettime(CLOCK_REALTIME, &cond_timeout);
         cond_timeout.tv_sec += PADSTATE_UPDATE_TIMEOUT_SEC;
 
-        int err;
         // waiting until cond_timedwait times out
-        while ((err = pthread_cond_timedwait(&padstate_last_updated.cond, &padstate_last_updated.mut, &cond_timeout)) ==
+        pthread_mutex_lock(&padstate_last_update.mut);
+        int err;
+        while ((err = pthread_cond_timedwait(&padstate_last_update.cond, &padstate_last_update.mut, &cond_timeout)) ==
                0) {
 
             clock_gettime(CLOCK_MONOTONIC, &time);
             time_ms = time.tv_sec * 1000 + time.tv_nsec / 1000000;
 
-            if (padstate_last_updated.target == ACT) {
+            if (padstate_last_update.target == ACT) {
                 header_p hdr = {.type = TYPE_TELEM, .subtype = TELEM_ACT};
                 act_state_p body = {
-                    .time = time_ms, .id = padstate_last_updated.act_id, .state = padstate_last_updated.act_val};
+                    .time = time_ms, .id = padstate_last_update.act_id, .state = padstate_last_update.act_val};
 
                 struct iovec pkt[2] = {
                     {.iov_base = &hdr, .iov_len = sizeof(hdr)},
@@ -325,9 +338,9 @@ void *telemetry_send_padstate(void *arg) {
                 };
                 telemetry_publish(args->sock, &msg);
 
-            } else if (padstate_last_updated.target == ARM) {
+            } else if (padstate_last_update.target == ARM) {
                 header_p hdr = {.type = TYPE_TELEM, .subtype = TELEM_ARM};
-                arm_state_p body = {.time = time_ms, .state = padstate_last_updated.arm_lvl};
+                arm_state_p body = {.time = time_ms, .state = padstate_last_update.arm_lvl};
 
                 struct iovec pkt[2] = {
                     {.iov_base = &hdr, .iov_len = sizeof(hdr)},
@@ -340,7 +353,7 @@ void *telemetry_send_padstate(void *arg) {
                 telemetry_publish(args->sock, &msg);
             }
         }
-        pthread_mutex_unlock(&padstate_last_updated.mut);
+        pthread_mutex_unlock(&padstate_last_update.mut);
     }
 
     thread_return(0);
