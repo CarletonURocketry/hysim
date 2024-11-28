@@ -9,6 +9,13 @@
 #include "actuator.h"
 #include "state.h"
 
+padstate_cond_t padstate_last_updated = {.mut = PTHREAD_MUTEX_INITIALIZER,
+                                         .cond = PTHREAD_COND_INITIALIZER,
+                                         .target = ACT,
+                                         .arm_lvl = 0,
+                                         .act_id = 0,
+                                         .act_val = false};
+
 static int dummy_on(actuator_t *act) {
     printf("Actuator #%d turned on\n", act->id);
     return 0;

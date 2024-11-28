@@ -1,4 +1,5 @@
 #include "state.h"
+#include <pthread.h>
 #include <stdatomic.h>
 #include <stdint.h>
 
@@ -47,6 +48,14 @@ int actuator_on(actuator_t *act) {
         return err;
     }
     atomic_store(&act->state, true);
+
+    pthread_mutex_lock(&padstate_last_updated.mut);
+    padstate_last_updated.target = ACT;
+    padstate_last_updated.act_id = act->id;
+    padstate_last_updated.act_val = true;
+    pthread_cond_signal(&padstate_last_updated.cond);
+    pthread_mutex_unlock(&padstate_last_updated.mut);
+
     return 0;
 }
 
@@ -61,6 +70,13 @@ int actuator_off(actuator_t *act) {
         return err;
     }
     atomic_store(&act->state, false);
+
+    pthread_mutex_lock(&padstate_last_updated.mut);
+    padstate_last_updated.target = ACT;
+    padstate_last_updated.act_id = act->id;
+    padstate_last_updated.act_val = false;
+    pthread_cond_signal(&padstate_last_updated.cond);
+    pthread_mutex_unlock(&padstate_last_updated.mut);
     return 0;
 }
 
