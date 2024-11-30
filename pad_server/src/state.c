@@ -131,13 +131,11 @@ int pad_actuate(padstate_t *state, uint8_t id, uint8_t req_state) {
         return -1;
     }
 
-    if (new_state == current_state) {
-        return ACT_OK;
-    }
-
-    err = actuator_set(&state->actuators[id], new_state);
-    if (err) {
-        return -1;
+    if (new_state != current_state) {
+        err = actuator_set(&state->actuators[id], new_state);
+        if (err) {
+            return -1;
+        }
     }
 
     pthread_mutex_lock(&state->last_update.mut);
