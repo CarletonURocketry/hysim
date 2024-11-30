@@ -49,13 +49,6 @@ int actuator_on(actuator_t *act) {
     }
     atomic_store(&act->state, true);
 
-    pthread_mutex_lock(&padstate_last_update.mut);
-    padstate_last_update.target = ACT;
-    padstate_last_update.act_id = act->id;
-    padstate_last_update.act_val = true;
-    pthread_cond_signal(&padstate_last_update.cond);
-    pthread_mutex_unlock(&padstate_last_update.mut);
-
     return 0;
 }
 
@@ -71,12 +64,6 @@ int actuator_off(actuator_t *act) {
     }
     atomic_store(&act->state, false);
 
-    pthread_mutex_lock(&padstate_last_update.mut);
-    padstate_last_update.target = ACT;
-    padstate_last_update.act_id = act->id;
-    padstate_last_update.act_val = false;
-    pthread_cond_signal(&padstate_last_update.cond);
-    pthread_mutex_unlock(&padstate_last_update.mut);
     return 0;
 }
 

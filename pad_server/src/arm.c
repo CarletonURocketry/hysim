@@ -42,12 +42,12 @@ int change_arm_level(padstate_t *state, arm_lvl_e new_arm) {
             return -1;
         }
 
-        pthread_mutex_lock(&padstate_last_update.mut);
-        padstate_last_update.target = ARM;
-        padstate_last_update.arm_lvl = new_arm;
+        pthread_mutex_lock(&state->last_update.mut);
+        state->last_update.target = ARM;
+        state->last_update.arm_lvl = new_arm;
 
-        pthread_cond_signal(&padstate_last_update.cond);
-        pthread_mutex_unlock(&padstate_last_update.mut);
+        pthread_cond_signal(&state->last_update.cond);
+        pthread_mutex_unlock(&state->last_update.mut);
 
         return ARM_OK;
     }
