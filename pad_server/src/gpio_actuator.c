@@ -1,3 +1,6 @@
+// BEWARE, this file is expluded from Linux compilation
+// because the of the missing nuttx header file
+
 #include "gpio_actuator.h"
 #include "stdio.h"
 #include <errno.h>
