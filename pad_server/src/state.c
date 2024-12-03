@@ -42,8 +42,8 @@ arm_lvl_e padstate_get_level(padstate_t *state) {
  * @return 1 for success, 0 for error
  */
 int padstate_change_level(padstate_t *state, arm_lvl_e *old_arm, arm_lvl_e new_arm) {
-    return atomic_compare_exchange_strong_explicit(&state->arm_level, old_arm, new_arm, memory_order_release,
-                                                   memory_order_acquire);
+    return atomic_compare_exchange_weak_explicit(&state->arm_level, old_arm, new_arm, memory_order_release,
+                                                 memory_order_acquire);
 }
 
 /*
