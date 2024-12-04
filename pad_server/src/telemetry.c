@@ -11,16 +11,11 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "state.h"
 #include "telemetry.h"
 
 /* Helper function for returning an error code from a thread */
 #define thread_return(e) pthread_exit((void *)(unsigned long)((e)))
-
-/* The main telemetry socket */
-typedef struct {
-    int sock;
-    struct sockaddr_in addr;
-} telemetry_sock_t;
 
 /*
  * Set up the telemetry socket for connection.
@@ -73,6 +68,14 @@ static int telemetry_publish(telemetry_sock_t *sock, struct msghdr *msg) {
  * @return 0 on success, error code on error.
  */
 static void telemetry_cleanup(void *arg) { telemetry_close((telemetry_sock_t *)(arg)); }
+
+static void telemetry_cancel_padstate_thread(void *arg) {
+    pthread_t telemetry_padstate_thread = *(pthread_t *)arg;
+
+    pthread_cancel(telemetry_padstate_thread);
+    pthread_join(telemetry_padstate_thread, NULL);
+    fprintf(stderr, "Telemetry pad state thread terminated\n");
+}
 
 /*
  * Cleanup function to kill a thread.
@@ -141,16 +144,7 @@ static void telemetry_publish_data(telemetry_sock_t *sock, telem_subtype_e type,
  * A function to create random data if not put in any file to read from
  * @params arg The arguent to run the telemetry thread
  */
-static void random_data(telemetry_args_t *args) {
-    /*Start telemetry socket */
-    telemetry_sock_t telem;
-    int err;
-    err = telemetry_init(&telem, args->port, args->addr);
-    if (err) {
-        fprintf(stderr, "Could not start telemetry socket: %s\n", strerror(err));
-        thread_return(err);
-    }
-    pthread_cleanup_push(telemetry_cleanup, &telem);
+static void random_data(telemetry_sock_t *telem) {
 
     uint32_t time = 0;
     uint32_t pressure = 0;
@@ -159,26 +153,25 @@ static void random_data(telemetry_args_t *args) {
     /* Start transmitting telemetry to active clients */
     for (;;) {
         pressure = (pressure + 1) % 255;
-        telemetry_publish_data(&telem, TELEM_PRESSURE, 1, time, 100 + pressure * 10);
-        telemetry_publish_data(&telem, TELEM_PRESSURE, 2, time, 200 + pressure * 20);
-        telemetry_publish_data(&telem, TELEM_PRESSURE, 3, time, 300 + pressure * 30);
-        telemetry_publish_data(&telem, TELEM_PRESSURE, 4, time, 250 + pressure * 40);
+        telemetry_publish_data(telem, TELEM_PRESSURE, 1, time, 100 + pressure * 10);
+        telemetry_publish_data(telem, TELEM_PRESSURE, 2, time, 200 + pressure * 20);
+        telemetry_publish_data(telem, TELEM_PRESSURE, 3, time, 300 + pressure * 30);
+        telemetry_publish_data(telem, TELEM_PRESSURE, 4, time, 250 + pressure * 40);
 
         temperature = (temperature + 1) % 20 + 20;
-        telemetry_publish_data(&telem, TELEM_TEMP, 1, time, temperature - 1);
-        telemetry_publish_data(&telem, TELEM_TEMP, 2, time, temperature + 1);
-        telemetry_publish_data(&telem, TELEM_TEMP, 3, time, temperature - 2);
-        telemetry_publish_data(&telem, TELEM_TEMP, 4, time, temperature + 2);
+        telemetry_publish_data(telem, TELEM_TEMP, 1, time, temperature - 1);
+        telemetry_publish_data(telem, TELEM_TEMP, 2, time, temperature + 1);
+        telemetry_publish_data(telem, TELEM_TEMP, 3, time, temperature - 2);
+        telemetry_publish_data(telem, TELEM_TEMP, 4, time, temperature + 2);
 
         mass = (mass + 10) % 4000 + 3900;
-        telemetry_publish_data(&telem, TELEM_MASS, 1, time, temperature + 2);
+        telemetry_publish_data(telem, TELEM_MASS, 1, time, temperature + 2);
 
         time = (time + 1) % 1000000;
-        usleep(1000);
+        usleep(1000000);
     }
 
     thread_return(0);
-    pthread_cleanup_pop(1);
 }
 
 /*
@@ -191,12 +184,6 @@ void *telemetry_run(void *arg) {
     char buffer[BUFSIZ];
     int err;
 
-    /* Null telemetry file means nothing to do */
-    if (args->data_file == NULL) {
-        // printf("No telemetry data to send.\n");
-        random_data(args);
-    }
-
     /* Start telemetry socket */
     telemetry_sock_t telem;
     err = telemetry_init(&telem, args->port, args->addr);
@@ -205,6 +192,20 @@ void *telemetry_run(void *arg) {
         thread_return(err);
     }
     pthread_cleanup_push(telemetry_cleanup, &telem);
+
+    pthread_t telemetry_padstate_thread;
+    telemetry_padstate_args_t telemetry_padstate_args = {.sock = &telem, .state = args->state};
+    err = pthread_create(&telemetry_padstate_thread, NULL, telemetry_send_padstate, &telemetry_padstate_args);
+    if (err) {
+        fprintf(stderr, "Could not start telemetry padstate sending thread: %s\n", strerror(err));
+        thread_return(err);
+    }
+    pthread_cleanup_push(telemetry_cancel_padstate_thread, &telemetry_padstate_thread);
+
+    /* Null telemetry file means nothing to do */
+    if (args->data_file == NULL) {
+        random_data(&telem);
+    }
 
     /* Open telemetry file */
     FILE *data = fopen(args->data_file, "r");
@@ -245,26 +246,110 @@ void *telemetry_run(void *arg) {
         header_p hdr = {.type = TYPE_TELEM, .subtype = TELEM_PRESSURE};
         pressure_p body = {.id = 1, .time = time, .pressure = pressure};
 
-        /* Send data to all clients. */
         struct iovec pkt[2] = {
             {.iov_base = &hdr, .iov_len = sizeof(hdr)},
             {.iov_base = &body, .iov_len = sizeof(body)},
         };
         struct msghdr msg = {
-            .msg_name = NULL,
-            .msg_namelen = 0,
             .msg_iov = pkt,
             .msg_iovlen = (sizeof(pkt) / sizeof(struct iovec)),
-            .msg_control = NULL,
-            .msg_controllen = 0,
-            .msg_flags = 0,
         };
         telemetry_publish(&telem, &msg);
-
-        usleep(1000);
+        usleep(1000000);
     }
 
     thread_return(0); // Normal return
 
     pthread_cleanup_pop(1);
+    pthread_cleanup_pop(1);
+}
+
+void *telemetry_send_padstate(void *arg) {
+    telemetry_padstate_args_t *args = (telemetry_padstate_args_t *)arg;
+    padstate_t *state = args->state;
+
+    for (;;) {
+        struct timespec time;
+        clock_gettime(CLOCK_MONOTONIC, &time);
+        uint32_t time_ms = time.tv_sec * 1000 + time.tv_nsec / 1000000;
+
+        // sending arming update
+        header_p hdr = {.type = TYPE_TELEM, .subtype = TELEM_ARM};
+        arm_lvl_e arm_lvl;
+        padstate_get_level(state, &arm_lvl);
+        arm_state_p body = {.time = time_ms, .state = arm_lvl};
+
+        struct iovec pkt[2] = {
+            {.iov_base = &hdr, .iov_len = sizeof(hdr)},
+            {.iov_base = &body, .iov_len = sizeof(body)},
+        };
+        struct msghdr msg = {
+            .msg_iov = pkt,
+            .msg_iovlen = (sizeof(pkt) / sizeof(struct iovec)),
+        };
+        telemetry_publish(args->sock, &msg);
+
+        // sending actuator update
+        for (int i = 0; i < NUM_ACTUATORS; i++) {
+            header_p hdr = {.type = TYPE_TELEM, .subtype = TELEM_ACT};
+            bool act_state;
+            padstate_get_actstate(state, i, &act_state);
+            act_state_p body = {.time = time_ms, .id = i, .state = act_state};
+
+            struct iovec pkt[2] = {
+                {.iov_base = &hdr, .iov_len = sizeof(hdr)},
+                {.iov_base = &body, .iov_len = sizeof(body)},
+            };
+            struct msghdr msg = {
+                .msg_iov = pkt,
+                .msg_iovlen = (sizeof(pkt) / sizeof(struct iovec)),
+            };
+            telemetry_publish(args->sock, &msg);
+        }
+
+        struct timespec cond_timeout;
+        clock_gettime(CLOCK_REALTIME, &cond_timeout);
+        cond_timeout.tv_sec += PADSTATE_UPDATE_TIMEOUT_SEC;
+
+        // waiting until cond_timedwait times out
+        pthread_mutex_lock(&state->last_update.mut);
+        while (pthread_cond_timedwait(&state->last_update.cond, &state->last_update.mut, &cond_timeout) == 0) {
+
+            clock_gettime(CLOCK_MONOTONIC, &time);
+            time_ms = time.tv_sec * 1000 + time.tv_nsec / 1000000;
+
+            if (state->last_update.target == ACT) {
+                header_p hdr = {.type = TYPE_TELEM, .subtype = TELEM_ACT};
+                act_state_p body = {
+                    .time = time_ms, .id = state->last_update.act_id, .state = state->last_update.act_val};
+
+                struct iovec pkt[2] = {
+                    {.iov_base = &hdr, .iov_len = sizeof(hdr)},
+                    {.iov_base = &body, .iov_len = sizeof(body)},
+                };
+                struct msghdr msg = {
+                    .msg_iov = pkt,
+                    .msg_iovlen = (sizeof(pkt) / sizeof(struct iovec)),
+                };
+                telemetry_publish(args->sock, &msg);
+
+            } else if (state->last_update.target == ARM) {
+                header_p hdr = {.type = TYPE_TELEM, .subtype = TELEM_ARM};
+                arm_state_p body = {.time = time_ms, .state = state->last_update.arm_lvl};
+
+                struct iovec pkt[2] = {
+                    {.iov_base = &hdr, .iov_len = sizeof(hdr)},
+                    {.iov_base = &body, .iov_len = sizeof(body)},
+                };
+                struct msghdr msg = {
+                    .msg_iov = pkt,
+                    .msg_iovlen = (sizeof(pkt) / sizeof(struct iovec)),
+                };
+                telemetry_publish(args->sock, &msg);
+            }
+        }
+        pthread_mutex_unlock(&state->last_update.mut);
+    }
+
+    thread_return(0);
 }

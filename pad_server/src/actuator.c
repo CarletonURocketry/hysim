@@ -1,4 +1,5 @@
 #include "state.h"
+#include <pthread.h>
 #include <stdatomic.h>
 #include <stdint.h>
 
@@ -47,6 +48,7 @@ int actuator_on(actuator_t *act) {
         return err;
     }
     atomic_store(&act->state, true);
+
     return 0;
 }
 
@@ -61,6 +63,7 @@ int actuator_off(actuator_t *act) {
         return err;
     }
     atomic_store(&act->state, false);
+
     return 0;
 }
 

@@ -11,11 +11,21 @@
 /* Number of actuators in the system: 12 solenoid valves, 1 fire valve, 1 quick disconnect, 1 igniter */
 #define NUM_ACTUATORS (12 + 1 + 1 + 1)
 
+typedef struct {
+    pthread_mutex_t mut;
+    pthread_cond_t cond;
+    enum { ACT, ARM } target;
+    act_id_e act_id;
+    bool act_val;
+    arm_lvl_e arm_lvl;
+} padstate_last_update_t;
+
 /* State of the entire pad control system */
 typedef struct {
     actuator_t actuators[NUM_ACTUATORS];
     arm_lvl_e arm_level;
     pthread_rwlock_t rw_lock;
+    padstate_last_update_t last_update;
 } padstate_t;
 
 void padstate_init(padstate_t *state);
