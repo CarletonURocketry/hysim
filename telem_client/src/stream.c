@@ -60,11 +60,18 @@ int stream_disconnect(stream_t *stream) {
     return 0;
 }
 
-/*
- * Receive bytes from the telemetry upstream.
+/* Receive bytes from the telemetry upstream.
  * TODO: docs
  */
-ssize_t stream_recv(stream_t *stream, void *buf, size_t n, int flag) {
+ssize_t stream_recv(stream_t *stream, void *buf, size_t n) {
     socklen_t size = sizeof(stream->addr);
-    return recvfrom(stream->sock, buf, n, flag, (struct sockaddr *)&stream->addr, &size);
+    return recvfrom(stream->sock, buf, n, MSG_WAITALL, (struct sockaddr *)&stream->addr, &size);
+}
+
+/* Peek `n` bytes from the telemetry upstream into `buf`.
+ * TODO: docs
+ */
+ssize_t stream_peek(stream_t *stream, void *buf, size_t n) {
+    socklen_t size = sizeof(stream->addr);
+    return recvfrom(stream->sock, buf, n, MSG_PEEK, (struct sockaddr *)&stream->addr, &size);
 }
