@@ -7,16 +7,8 @@
 #include <stdio.h>
 
 #include "actuator.h"
+#include "gpio_actuator.h"
 #include "state.h"
-
-static int dummy_on(actuator_t *act) {
-    printf("Actuator #%d turned on\n", act->id);
-    return 0;
-}
-static int dummy_off(actuator_t *act) {
-    printf("Actuator #%d turned off\n", act->id);
-    return 0;
-}
 
 /* TODO: docs */
 void padstate_init(padstate_t *state) {
@@ -24,7 +16,7 @@ void padstate_init(padstate_t *state) {
     // TODO: Is this right? Can we assume if the program is running then the pad is armed?
     state->arm_level = ARMED_PAD;
     for (unsigned int i = 0; i < NUM_ACTUATORS; i++) {
-        actuator_init(&state->actuators[i], i, dummy_on, dummy_off, NULL);
+        actuator_init(&state->actuators[i], i, gpio_actuator_on, gpio_actuator_off, NULL);
     }
 
     pthread_mutex_init(&state->update_mut, NULL);
@@ -35,27 +27,19 @@ void padstate_init(padstate_t *state) {
 /* TODO: docs
  *
  */
-int padstate_get_level(padstate_t *state, arm_lvl_e *arm_val) {
-    int err;
-    err = pthread_rwlock_rdlock(&state->rw_lock);
-    if (err) return err;
-
-    *arm_val = state->arm_level;
-
-    return pthread_rwlock_unlock(&state->rw_lock);
+arm_lvl_e padstate_get_level(padstate_t *state) {
+    /* Something has gone terribly wrong if reading a variable doesn't work, so no errors are returned from here */
+    return atomic_load_explicit(&state->arm_level, __ATOMIC_ACQUIRE);
 }
 
 /* TODO: docs
  * NOTE: this does not check for valid arming state transitions
+ * NOTE: use in a loop, see arm.c for an example and why
+ * @return 1 for success, 0 for error
  */
-int padstate_change_level(padstate_t *state, arm_lvl_e new_arm) {
-    int err;
-    err = pthread_rwlock_wrlock(&state->rw_lock);
-    if (err) return err;
-
-    state->arm_level = new_arm;
-
-    return pthread_rwlock_unlock(&state->rw_lock);
+int padstate_change_level(padstate_t *state, arm_lvl_e *old_arm, arm_lvl_e new_arm) {
+    return atomic_compare_exchange_weak_explicit(&state->arm_level, old_arm, new_arm, memory_order_release,
+                                                 memory_order_acquire);
 }
 
 /*
@@ -84,12 +68,7 @@ int pad_actuate(padstate_t *state, uint8_t id, uint8_t req_state) {
     if (req_state != 0 && req_state != 1) return ACT_INV;
     bool new_state = (bool)req_state;
 
-    arm_lvl_e arm_lvl;
-    int err = padstate_get_level(state, &arm_lvl);
-    if (err) {
-        errno = err;
-        return -1;
-    }
+    arm_lvl_e arm_lvl = padstate_get_level(state);
 
     bool is_solenoid_valve = id >= ID_XV1 && id <= ID_XV12;
 
@@ -122,7 +101,7 @@ int pad_actuate(padstate_t *state, uint8_t id, uint8_t req_state) {
     }
 
     bool current_state;
-    err = padstate_get_actstate(state, id, &current_state);
+    int err = padstate_get_actstate(state, id, &current_state);
     if (err) {
         errno = err;
         return -1;
