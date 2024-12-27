@@ -18,6 +18,10 @@
 
 #define deref(type, data) *((type *)(data))
 
+/* Helper macro for dereferencing pointers */
+
+#define deref(type, data) *((type *)(data))
+
 /* Helper function for returning an error code from a thread */
 
 #define thread_return(e) pthread_exit((void *)(unsigned long)((e)))
@@ -90,6 +94,7 @@ static void cancel_wrapper(void *arg) { pthread_cancel(*(pthread_t *)(arg)); }
 
 /*
  * A function to publish pressure, temperature, mass data.
+ * A function to publish pressure, temperature, mass data.
  * @param sock The telemetry socket on which to publish.
  * @param type The telemetry type is being published.
  * @param id The id of that data
@@ -102,6 +107,9 @@ static void telemetry_publish_data(telemetry_sock_t *sock, telem_subtype_e type,
     pressure_p pressureBody = {.id = id, .time = time, .pressure = deref(int32_t, data)};
     temp_p temperatureBody = {.id = id, .time = time, .temperature = deref(uint32_t, data)};
     mass_p massBody = {.id = id, .time = time, .mass = deref(uint32_t, data)};
+    pressure_p pressureBody = {.id = id, .time = time, .pressure = deref(int32_t, data)};
+    temp_p temperatureBody = {.id = id, .time = time, .temperature = deref(uint32_t, data)};
+    mass_p massBody = {.id = id, .time = time, .mass = deref(uint32_t, data)};
 
     struct iovec pkt[2] = {
         {.iov_base = &hdr, .iov_len = sizeof(hdr)},
@@ -109,8 +117,12 @@ static void telemetry_publish_data(telemetry_sock_t *sock, telem_subtype_e type,
 
     /* Create the appropriate body base on type*/
 
+    /* Create the appropriate body base on type*/
+
     switch (type) {
     case TELEM_PRESSURE: {
+        pkt[1].iov_base = &pressureBody;
+        pkt[1].iov_len = sizeof(pressureBody);
         pkt[1].iov_base = &pressureBody;
         pkt[1].iov_len = sizeof(pressureBody);
         break;
@@ -123,9 +135,13 @@ static void telemetry_publish_data(telemetry_sock_t *sock, telem_subtype_e type,
     case TELEM_TEMP: {
         pkt[1].iov_base = &temperatureBody;
         pkt[1].iov_len = sizeof(temperatureBody);
+        pkt[1].iov_base = &temperatureBody;
+        pkt[1].iov_len = sizeof(temperatureBody);
         break;
     }
     default:
+        fprintf(stderr, "Invalid telemetry data type: %u\n", type);
+        return;
         fprintf(stderr, "Invalid telemetry data type: %u\n", type);
         return;
     }
@@ -133,6 +149,7 @@ static void telemetry_publish_data(telemetry_sock_t *sock, telem_subtype_e type,
         .msg_name = NULL,
         .msg_namelen = 0,
         .msg_iov = pkt,
+        .msg_iovlen = (sizeof(pkt) / sizeof(pkt[0])),
         .msg_iovlen = (sizeof(pkt) / sizeof(pkt[0])),
         .msg_control = NULL,
         .msg_controllen = 0,
