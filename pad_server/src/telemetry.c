@@ -18,10 +18,6 @@
 
 #define deref(type, data) *((type *)(data))
 
-/* Helper macro for dereferencing pointers */
-
-#define deref(type, data) *((type *)(data))
-
 /* Helper function for returning an error code from a thread */
 
 #define thread_return(e) pthread_exit((void *)(unsigned long)((e)))
@@ -329,19 +325,20 @@ void *telemetry_update_padstate(void *arg) {
     padstate_t *state = args->state;
 
     for (;;) {
-        telemetry_send_padstate(state, args->sock);
-
         struct timespec cond_timeout;
         clock_gettime(CLOCK_REALTIME, &cond_timeout);
         cond_timeout.tv_sec += PADSTATE_UPDATE_TIMEOUT_SEC;
 
-        // waiting until cond_timedwait times out
+        int err = -1;
         pthread_mutex_lock(&state->update_mut);
-        while (pthread_cond_timedwait(&state->update_cond, &state->update_mut, &cond_timeout) == 0 &&
-               state->update_recorded == true) {
-            telemetry_send_padstate(state, args->sock);
-            state->update_recorded = false;
+        // waiting until either the cond times out or an update is received
+        // and we confirmed it was not a spurious wakeup
+        while (err != ETIMEDOUT && !state->update_recorded) {
+            pthread_cond_timedwait(&state->update_cond, &state->update_mut, &cond_timeout);
         }
+
+        telemetry_send_padstate(state, args->sock);
+        state->update_recorded = false;
         pthread_mutex_unlock(&state->update_mut);
     }
 
