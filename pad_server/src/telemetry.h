@@ -28,6 +28,7 @@ typedef struct {
 } telemetry_args_t;
 
 void *telemetry_run(void *arg);
-void *telemetry_send_padstate(void *arg);
+void *telemetry_update_padstate(void *arg);
+void telemetry_send_padstate(padstate_t *state, telemetry_sock_t *sock);
 
 #endif // _TELEMETRY_H_

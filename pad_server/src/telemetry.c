@@ -195,7 +195,7 @@ void *telemetry_run(void *arg) {
 
     pthread_t telemetry_padstate_thread;
     telemetry_padstate_args_t telemetry_padstate_args = {.sock = &telem, .state = args->state};
-    err = pthread_create(&telemetry_padstate_thread, NULL, telemetry_send_padstate, &telemetry_padstate_args);
+    err = pthread_create(&telemetry_padstate_thread, NULL, telemetry_update_padstate, &telemetry_padstate_args);
     if (err) {
         fprintf(stderr, "Could not start telemetry padstate sending thread: %s\n", strerror(err));
         thread_return(err);
@@ -264,20 +264,38 @@ void *telemetry_run(void *arg) {
     pthread_cleanup_pop(1);
 }
 
-void *telemetry_send_padstate(void *arg) {
-    telemetry_padstate_args_t *args = (telemetry_padstate_args_t *)arg;
-    padstate_t *state = args->state;
+/*
+ * Helper function to send the entire padstate over telemetry
+ * @param state the pad state
+ * @param sock the telemetry socket
+ */
+void telemetry_send_padstate(padstate_t *state, telemetry_sock_t *sock) {
+    struct timespec time;
+    clock_gettime(CLOCK_MONOTONIC, &time);
+    uint32_t time_ms = time.tv_sec * 1000 + time.tv_nsec / 1000000;
 
-    for (;;) {
-        struct timespec time;
-        clock_gettime(CLOCK_MONOTONIC, &time);
-        uint32_t time_ms = time.tv_sec * 1000 + time.tv_nsec / 1000000;
+    // sending arming update
+    header_p hdr = {.type = TYPE_TELEM, .subtype = TELEM_ARM};
+    arm_lvl_e arm_lvl;
+    padstate_get_level(state, &arm_lvl);
+    arm_state_p body = {.time = time_ms, .state = arm_lvl};
 
-        // sending arming update
-        header_p hdr = {.type = TYPE_TELEM, .subtype = TELEM_ARM};
-        arm_lvl_e arm_lvl;
-        padstate_get_level(state, &arm_lvl);
-        arm_state_p body = {.time = time_ms, .state = arm_lvl};
+    struct iovec pkt[2] = {
+        {.iov_base = &hdr, .iov_len = sizeof(hdr)},
+        {.iov_base = &body, .iov_len = sizeof(body)},
+    };
+    struct msghdr msg = {
+        .msg_iov = pkt,
+        .msg_iovlen = (sizeof(pkt) / sizeof(struct iovec)),
+    };
+    telemetry_publish(sock, &msg);
+
+    // sending actuator update
+    for (int i = 0; i < NUM_ACTUATORS; i++) {
+        header_p hdr = {.type = TYPE_TELEM, .subtype = TELEM_ACT};
+        bool act_state;
+        padstate_get_actstate(state, i, &act_state);
+        act_state_p body = {.time = time_ms, .id = i, .state = act_state};
 
         struct iovec pkt[2] = {
             {.iov_base = &hdr, .iov_len = sizeof(hdr)},
@@ -287,68 +305,29 @@ void *telemetry_send_padstate(void *arg) {
             .msg_iov = pkt,
             .msg_iovlen = (sizeof(pkt) / sizeof(struct iovec)),
         };
-        telemetry_publish(args->sock, &msg);
+        telemetry_publish(sock, &msg);
+    }
+}
 
-        // sending actuator update
-        for (int i = 0; i < NUM_ACTUATORS; i++) {
-            header_p hdr = {.type = TYPE_TELEM, .subtype = TELEM_ACT};
-            bool act_state;
-            padstate_get_actstate(state, i, &act_state);
-            act_state_p body = {.time = time_ms, .id = i, .state = act_state};
+void *telemetry_update_padstate(void *arg) {
+    telemetry_padstate_args_t *args = (telemetry_padstate_args_t *)arg;
+    padstate_t *state = args->state;
 
-            struct iovec pkt[2] = {
-                {.iov_base = &hdr, .iov_len = sizeof(hdr)},
-                {.iov_base = &body, .iov_len = sizeof(body)},
-            };
-            struct msghdr msg = {
-                .msg_iov = pkt,
-                .msg_iovlen = (sizeof(pkt) / sizeof(struct iovec)),
-            };
-            telemetry_publish(args->sock, &msg);
-        }
+    for (;;) {
+        telemetry_send_padstate(state, args->sock);
 
         struct timespec cond_timeout;
         clock_gettime(CLOCK_REALTIME, &cond_timeout);
         cond_timeout.tv_sec += PADSTATE_UPDATE_TIMEOUT_SEC;
 
         // waiting until cond_timedwait times out
-        pthread_mutex_lock(&state->last_update.mut);
-        while (pthread_cond_timedwait(&state->last_update.cond, &state->last_update.mut, &cond_timeout) == 0) {
-
-            clock_gettime(CLOCK_MONOTONIC, &time);
-            time_ms = time.tv_sec * 1000 + time.tv_nsec / 1000000;
-
-            if (state->last_update.target == ACT) {
-                header_p hdr = {.type = TYPE_TELEM, .subtype = TELEM_ACT};
-                act_state_p body = {
-                    .time = time_ms, .id = state->last_update.act_id, .state = state->last_update.act_val};
-
-                struct iovec pkt[2] = {
-                    {.iov_base = &hdr, .iov_len = sizeof(hdr)},
-                    {.iov_base = &body, .iov_len = sizeof(body)},
-                };
-                struct msghdr msg = {
-                    .msg_iov = pkt,
-                    .msg_iovlen = (sizeof(pkt) / sizeof(struct iovec)),
-                };
-                telemetry_publish(args->sock, &msg);
-
-            } else if (state->last_update.target == ARM) {
-                header_p hdr = {.type = TYPE_TELEM, .subtype = TELEM_ARM};
-                arm_state_p body = {.time = time_ms, .state = state->last_update.arm_lvl};
-
-                struct iovec pkt[2] = {
-                    {.iov_base = &hdr, .iov_len = sizeof(hdr)},
-                    {.iov_base = &body, .iov_len = sizeof(body)},
-                };
-                struct msghdr msg = {
-                    .msg_iov = pkt,
-                    .msg_iovlen = (sizeof(pkt) / sizeof(struct iovec)),
-                };
-                telemetry_publish(args->sock, &msg);
-            }
+        pthread_mutex_lock(&state->update_mut);
+        while (pthread_cond_timedwait(&state->update_cond, &state->update_mut, &cond_timeout) == 0 &&
+               state->update_recorded == true) {
+            telemetry_send_padstate(state, args->sock);
+            state->update_recorded = false;
         }
-        pthread_mutex_unlock(&state->last_update.mut);
+        pthread_mutex_unlock(&state->update_mut);
     }
 
     thread_return(0);

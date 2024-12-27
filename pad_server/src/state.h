@@ -12,8 +12,6 @@
 #define NUM_ACTUATORS (12 + 1 + 1 + 1)
 
 typedef struct {
-    pthread_mutex_t mut;
-    pthread_cond_t cond;
     enum { ACT, ARM } target;
     act_id_e act_id;
     bool act_val;
@@ -25,7 +23,9 @@ typedef struct {
     actuator_t actuators[NUM_ACTUATORS];
     arm_lvl_e arm_level;
     pthread_rwlock_t rw_lock;
-    padstate_last_update_t last_update;
+    pthread_mutex_t update_mut;
+    pthread_cond_t update_cond;
+    bool update_recorded;
 } padstate_t;
 
 void padstate_init(padstate_t *state);
