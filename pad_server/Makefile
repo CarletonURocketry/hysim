@@ -5,6 +5,8 @@ OUT = pad
 SRCDIR = $(abspath ./src)
 SRCS = $(wildcard $(SRCDIR)/*.c)
 SRCS += $(wildcard ../packets/*.c)
+EXCLUDE_SRCS = $(SRCDIR)/gpio_actuator.c 
+SRCS := $(filter-out $(EXCLUDE_SRCS), $(SRCS))
 
 OBJS = $(patsubst %.c,%.o,$(SRCS))
 
