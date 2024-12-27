@@ -18,9 +18,19 @@
 
 #define deref(type, data) *((type *)(data))
 
+/* Helper macro for dereferencing pointers */
+
+#define deref(type, data) *((type *)(data))
+
 /* Helper function for returning an error code from a thread */
 
 #define thread_return(e) pthread_exit((void *)(unsigned long)((e)))
+
+/* The main telemetry socket */
+typedef struct {
+    int sock;
+    struct sockaddr_in addr;
+} telemetry_sock_t;
 
 /*
  * Set up the telemetry socket for connection.
@@ -90,6 +100,7 @@ static void cancel_wrapper(void *arg) { pthread_cancel(*(pthread_t *)(arg)); }
 
 /*
  * A function to publish pressure, temperature, mass data.
+ * A function to publish pressure, temperature, mass data.
  * @param sock The telemetry socket on which to publish.
  * @param type The telemetry type is being published.
  * @param id The id of that data
@@ -98,246 +109,273 @@ static void cancel_wrapper(void *arg) { pthread_cancel(*(pthread_t *)(arg)); }
  */
 static void telemetry_publish_data(telemetry_sock_t *sock, telem_subtype_e type, uint8_t id, uint32_t time,
                                    void *data) {
-    header_p hdr = {.type = TYPE_TELEM, .subtype = type};
-    pressure_p pressureBody = {.id = id, .time = time, .pressure = deref(int32_t, data)};
-    temp_p temperatureBody = {.id = id, .time = time, .temperature = deref(uint32_t, data)};
-    mass_p massBody = {.id = id, .time = time, .mass = deref(uint32_t, data)};
+                                   void *data) {
+                                       header_p hdr = {.type = TYPE_TELEM, .subtype = type};
+                                       pressure_p pressureBody = {
+                                           .id = id, .time = time, .pressure = deref(int32_t, data)};
+                                       temp_p temperatureBody = {
+                                           .id = id, .time = time, .temperature = deref(uint32_t, data)};
+                                       mass_p massBody = {.id = id, .time = time, .mass = deref(uint32_t, data)};
+                                       pressure_p pressureBody = {
+                                           .id = id, .time = time, .pressure = deref(int32_t, data)};
+                                       temp_p temperatureBody = {
+                                           .id = id, .time = time, .temperature = deref(uint32_t, data)};
+                                       mass_p massBody = {.id = id, .time = time, .mass = deref(uint32_t, data)};
 
-    struct iovec pkt[2] = {
-        {.iov_base = &hdr, .iov_len = sizeof(hdr)},
-    };
+                                       struct iovec pkt[2] = {
+                                           {.iov_base = &hdr, .iov_len = sizeof(hdr)},
+                                       };
 
-    /* Create the appropriate body base on type*/
+                                       /* Create the appropriate body base on type*/
 
-    switch (type) {
-    case TELEM_PRESSURE: {
-        pkt[1].iov_base = &pressureBody;
-        pkt[1].iov_len = sizeof(pressureBody);
-        break;
-    }
-    case TELEM_MASS: {
-        pkt[1].iov_base = &massBody;
-        pkt[1].iov_len = sizeof(massBody);
-        break;
-    }
-    case TELEM_TEMP: {
-        pkt[1].iov_base = &temperatureBody;
-        pkt[1].iov_len = sizeof(temperatureBody);
-        break;
-    }
-    default:
-        fprintf(stderr, "Invalid telemetry data type: %u\n", type);
-        return;
-    }
-    struct msghdr msg = {
-        .msg_name = NULL,
-        .msg_namelen = 0,
-        .msg_iov = pkt,
-        .msg_iovlen = (sizeof(pkt) / sizeof(pkt[0])),
-        .msg_control = NULL,
-        .msg_controllen = 0,
-        .msg_flags = 0,
-    };
-    telemetry_publish(sock, &msg);
-    usleep(1000);
-}
+                                       /* Create the appropriate body base on type*/
 
-/* A function to create random data if not put in any file to read from
- * @params arg The argument to run the telemetry thread
- */
-static void random_data(telemetry_sock_t *telem) {
-    uint32_t time = 0;
-    uint32_t pressure = 0;
-    uint32_t temperature = 0;
-    uint32_t mass = 4000;
+                                       switch (type) {
+                                       case TELEM_PRESSURE: {
+                                           pkt[1].iov_base = &pressureBody;
+                                           pkt[1].iov_len = sizeof(pressureBody);
+                                           pkt[1].iov_base = &pressureBody;
+                                           pkt[1].iov_len = sizeof(pressureBody);
+                                           break;
+                                       }
+                                       case TELEM_MASS: {
+                                           pkt[1].iov_base = &massBody;
+                                           pkt[1].iov_len = sizeof(massBody);
+                                           break;
+                                       }
+                                       case TELEM_TEMP: {
+                                           pkt[1].iov_base = &temperatureBody;
+                                           pkt[1].iov_len = sizeof(temperatureBody);
+                                           pkt[1].iov_base = &temperatureBody;
+                                           pkt[1].iov_len = sizeof(temperatureBody);
+                                           break;
+                                       }
+                                       default:
+                                           fprintf(stderr, "Invalid telemetry data type: %u\n", type);
+                                           return;
+                                           fprintf(stderr, "Invalid telemetry data type: %u\n", type);
+                                           return;
+                                       }
+                                       struct msghdr msg = {
+                                           .msg_name = NULL,
+                                           .msg_namelen = 0,
+                                           .msg_iov = pkt,
+                                           .msg_iovlen = (sizeof(pkt) / sizeof(pkt[0])),
+                                           .msg_iovlen = (sizeof(pkt) / sizeof(pkt[0])),
+                                           .msg_control = NULL,
+                                           .msg_controllen = 0,
+                                           .msg_flags = 0,
+                                       };
+                                       telemetry_publish(sock, &msg);
+                                       usleep(1000);
+                                   }
 
-    /* Start transmitting telemetry to active clients */
-    for (;;) {
-        pressure = (pressure + 1) % 255;
-        uint32_t pressure_i = 100 + pressure * 10;
-        telemetry_publish_data(telem, TELEM_PRESSURE, 1, time, &pressure_i);
-        pressure_i = 200 + pressure * 20;
-        telemetry_publish_data(telem, TELEM_PRESSURE, 2, time, &pressure_i);
-        pressure_i = 300 + pressure * 30;
-        telemetry_publish_data(telem, TELEM_PRESSURE, 3, time, &pressure_i);
-        pressure_i = 250 + pressure * 40;
-        telemetry_publish_data(telem, TELEM_PRESSURE, 4, time, &pressure_i);
+                                   /* A function to create random data if not put in any file to read from
+                                    * @params arg The argument to run the telemetry thread
+                                   /* A function to create random data if not put in any file to read from
+                                    * @params arg The argument to run the telemetry thread
+                                    */
+                                   static void random_data(telemetry_sock_t * telem) {
+                                       uint32_t time = 0;
+                                       uint32_t pressure = 0;
+                                       uint32_t temperature = 0;
+                                       uint32_t mass = 4000;
 
-        temperature = (temperature + 1) % 20000 + 20000;
-        int32_t temp_i = temperature - 1;
-        telemetry_publish_data(telem, TELEM_TEMP, 1, time, &temp_i);
-        temp_i = temperature + 1;
-        telemetry_publish_data(telem, TELEM_TEMP, 2, time, &temp_i);
-        temp_i = temperature - 2;
-        telemetry_publish_data(telem, TELEM_TEMP, 3, time, &temp_i);
-        temp_i = temperature + 2;
-        telemetry_publish_data(telem, TELEM_TEMP, 4, time, &temp_i);
+                                       /* Start transmitting telemetry to active clients */
+                                       for (;;) {
 
-        mass = (mass + 10) % 4000 + 3900;
-        uint32_t mass_i = mass + 2;
-        telemetry_publish_data(telem, TELEM_MASS, 1, time, &mass_i);
+                                           pressure = (pressure + 1) % 255;
+                                           uint32_t pressure_i = 100 + pressure * 10;
+                                           telemetry_publish_data(telem, TELEM_PRESSURE, 1, time, &pressure_i);
+                                           pressure_i = 200 + pressure * 20;
+                                           telemetry_publish_data(telem, TELEM_PRESSURE, 2, time, &pressure_i);
+                                           pressure_i = 300 + pressure * 30;
+                                           telemetry_publish_data(telem, TELEM_PRESSURE, 3, time, &pressure_i);
+                                           pressure_i = 250 + pressure * 40;
+                                           telemetry_publish_data(telem, TELEM_PRESSURE, 4, time, &pressure_i);
 
-        time = (time + 1) % 1000000;
-        usleep(100000);
-    }
+                                           temperature = (temperature + 1) % 20000 + 20000;
+                                           int32_t temp_i = temperature - 1;
+                                           telemetry_publish_data(telem, TELEM_TEMP, 1, time, &temp_i);
+                                           temp_i = temperature + 1;
+                                           telemetry_publish_data(telem, TELEM_TEMP, 2, time, &temp_i);
+                                           temp_i = temperature - 2;
+                                           telemetry_publish_data(telem, TELEM_TEMP, 3, time, &temp_i);
+                                           temp_i = temperature + 2;
+                                           telemetry_publish_data(telem, TELEM_TEMP, 4, time, &temp_i);
 
-    thread_return(0);
-}
+                                           mass = (mass + 10) % 4000 + 3900;
+                                           uint32_t mass_i = mass + 2;
+                                           telemetry_publish_data(telem, TELEM_MASS, 1, time, &mass_i);
 
-/*
- * Run the thread responsible for transmitting telemetry data.
- * @param arg The arguments to the telemetry thread, of type `telemetry_args_t`.
- */
-void *telemetry_run(void *arg) {
+                                           time = (time + 1) % 1000000;
+                                           usleep(100000);
+                                           usleep(100000);
+                                       }
 
-    telemetry_args_t *args = (telemetry_args_t *)(arg);
-    char buffer[BUFSIZ];
-    int err;
+                                       thread_return(0);
+                                   }
 
-    /* Start telemetry socket */
-    telemetry_sock_t telem;
-    err = telemetry_init(&telem, args->port, args->addr);
-    if (err) {
-        fprintf(stderr, "Could not start telemetry socket: %s\n", strerror(err));
-        thread_return(err);
-    }
-    pthread_cleanup_push(telemetry_cleanup, &telem);
+                                   /*
+                                    * Run the thread responsible for transmitting telemetry data.
+                                    * @param arg The arguments to the telemetry thread, of type `telemetry_args_t`.
+                                    */
+                                   void *telemetry_run(void *arg) {
 
-    pthread_t telemetry_padstate_thread;
-    telemetry_padstate_args_t telemetry_padstate_args = {.sock = &telem, .state = args->state};
-    err = pthread_create(&telemetry_padstate_thread, NULL, telemetry_update_padstate, &telemetry_padstate_args);
-    if (err) {
-        fprintf(stderr, "Could not start telemetry padstate sending thread: %s\n", strerror(err));
-        thread_return(err);
-    }
-    pthread_cleanup_push(telemetry_cancel_padstate_thread, &telemetry_padstate_thread);
+                                       telemetry_args_t *args = (telemetry_args_t *)(arg);
+                                       char buffer[BUFSIZ];
+                                       int err;
 
-    /* Null telemetry file means nothing to do */
-    if (args->data_file == NULL) {
-        random_data(&telem);
-    }
+                                       /* Start telemetry socket */
+                                       telemetry_sock_t telem;
+                                       err = telemetry_init(&telem, args->port, args->addr);
+                                       if (err) {
+                                           fprintf(stderr, "Could not start telemetry socket: %s\n", strerror(err));
+                                           thread_return(err);
+                                       }
+                                       pthread_cleanup_push(telemetry_cleanup, &telem);
 
-    /* Open telemetry file */
-    FILE *data = fopen(args->data_file, "r");
-    if (data == NULL) {
-        fprintf(stderr, "Could not open telemetry file \"%s\" with error: %s\n", args->data_file, strerror(errno));
-        thread_return(err);
-    }
+                                       pthread_t telemetry_padstate_thread;
+                                       telemetry_padstate_args_t telemetry_padstate_args = {.sock = &telem,
+                                                                                            .state = args->state};
+                                       err = pthread_create(&telemetry_padstate_thread, NULL, telemetry_update_padstate,
+                                                            &telemetry_padstate_args);
+                                       if (err) {
+                                           fprintf(stderr, "Could not start telemetry padstate sending thread: %s\n",
+                                                   strerror(err));
+                                           thread_return(err);
+                                       }
+                                       pthread_cleanup_push(telemetry_cancel_padstate_thread,
+                                                            &telemetry_padstate_thread);
 
-    /* Start transmitting telemetry to active clients */
-    for (;;) {
+                                       /* Null telemetry file means nothing to do */
+                                       if (args->data_file == NULL) {
+                                           random_data(&telem);
+                                       }
 
-        /* Handle file errors */
-        if (ferror(data)) {
-            fprintf(stderr, "Error reading telemetry file: %s\n", strerror(errno));
-            thread_return(err);
-        }
+                                       /* Open telemetry file */
+                                       FILE *data = fopen(args->data_file, "r");
+                                       if (data == NULL) {
+                                           fprintf(stderr, "Could not open telemetry file \"%s\" with error: %s\n",
+                                                   args->data_file, strerror(errno));
+                                           thread_return(err);
+                                       }
 
-        /* Read from file in a loop */
-        if (feof(data)) {
-            rewind(data);
-        }
+                                       /* Start transmitting telemetry to active clients */
+                                       for (;;) {
 
-        /* Read next line */
-        if (fgets(buffer, sizeof(buffer), data) == NULL) {
-            continue;
-        }
+                                           /* Handle file errors */
+                                           if (ferror(data)) {
+                                               fprintf(stderr, "Error reading telemetry file: %s\n", strerror(errno));
+                                               thread_return(err);
+                                           }
 
-        /* TODO: parse all data */
+                                           /* Read from file in a loop */
+                                           if (feof(data)) {
+                                               rewind(data);
+                                           }
 
-        char *rest = buffer;
-        char *time_str = strtok_r(rest, ",", &rest);
-        uint32_t time = strtoul(time_str, NULL, 10);
-        char *mass_str = strtok_r(rest, ",", &rest);
-        uint32_t mass = strtoul(mass_str, NULL, 10);
-        char *pstr = strtok_r(rest, ",", &rest);
-        uint32_t pressure = strtoul(pstr, NULL, 10);
+                                           /* Read next line */
+                                           if (fgets(buffer, sizeof(buffer), data) == NULL) {
+                                               continue;
+                                           }
 
-        header_p hdr = {.type = TYPE_TELEM, .subtype = TELEM_PRESSURE};
-        pressure_p body = {.id = 1, .time = time, .pressure = pressure};
+                                           /* TODO: parse all data */
 
-        struct iovec pkt[2] = {
-            {.iov_base = &hdr, .iov_len = sizeof(hdr)},
-            {.iov_base = &body, .iov_len = sizeof(body)},
-        };
-        struct msghdr msg = {
-            .msg_iov = pkt,
-            .msg_iovlen = (sizeof(pkt) / sizeof(struct iovec)),
-        };
-        telemetry_publish(&telem, &msg);
-        usleep(1000000);
-    }
+                                           char *rest = buffer;
+                                           char *time_str = strtok_r(rest, ",", &rest);
+                                           uint32_t time = strtoul(time_str, NULL, 10);
+                                           char *mass_str = strtok_r(rest, ",", &rest);
+                                           uint32_t mass = strtoul(mass_str, NULL, 10);
+                                           char *pstr = strtok_r(rest, ",", &rest);
+                                           uint32_t pressure = strtoul(pstr, NULL, 10);
 
-    thread_return(0); // Normal return
+                                           header_p hdr = {.type = TYPE_TELEM, .subtype = TELEM_PRESSURE};
+                                           pressure_p body = {.id = 1, .time = time, .pressure = pressure};
 
-    pthread_cleanup_pop(1);
-    pthread_cleanup_pop(1);
-}
+                                           struct iovec pkt[2] = {
+                                               {.iov_base = &hdr, .iov_len = sizeof(hdr)},
+                                               {.iov_base = &body, .iov_len = sizeof(body)},
+                                           };
+                                           struct msghdr msg = {
+                                               .msg_iov = pkt,
+                                               .msg_iovlen = (sizeof(pkt) / sizeof(struct iovec)),
+                                           };
+                                           telemetry_publish(&telem, &msg);
+                                           usleep(1000000);
+                                       }
 
-/*
- * Helper function to send the entire padstate over telemetry
- * @param state the pad state
- * @param sock the telemetry socket
- */
-void telemetry_send_padstate(padstate_t *state, telemetry_sock_t *sock) {
-    struct timespec time;
-    clock_gettime(CLOCK_MONOTONIC, &time);
-    uint32_t time_ms = time.tv_sec * 1000 + time.tv_nsec / 1000000;
+                                       thread_return(0); // Normal return
 
-    // sending arming update
-    header_p hdr = {.type = TYPE_TELEM, .subtype = TELEM_ARM};
-    arm_lvl_e arm_lvl = padstate_get_level(state);
-    arm_state_p body = {.time = time_ms, .state = arm_lvl};
+                                       pthread_cleanup_pop(1);
+                                       pthread_cleanup_pop(1);
+                                   }
 
-    struct iovec pkt[2] = {
-        {.iov_base = &hdr, .iov_len = sizeof(hdr)},
-        {.iov_base = &body, .iov_len = sizeof(body)},
-    };
-    struct msghdr msg = {
-        .msg_iov = pkt,
-        .msg_iovlen = (sizeof(pkt) / sizeof(struct iovec)),
-    };
-    telemetry_publish(sock, &msg);
+                                   /*
+                                    * Helper function to send the entire padstate over telemetry
+                                    * @param state the pad state
+                                    * @param sock the telemetry socket
+                                    */
+                                   void telemetry_send_padstate(padstate_t * state, telemetry_sock_t * sock) {
+                                       struct timespec time;
+                                       clock_gettime(CLOCK_MONOTONIC, &time);
+                                       uint32_t time_ms = time.tv_sec * 1000 + time.tv_nsec / 1000000;
 
-    // sending actuator update
-    for (int i = 0; i < NUM_ACTUATORS; i++) {
-        header_p hdr = {.type = TYPE_TELEM, .subtype = TELEM_ACT};
-        bool act_state;
-        padstate_get_actstate(state, i, &act_state);
-        act_state_p body = {.time = time_ms, .id = i, .state = act_state};
+                                       // sending arming update
+                                       header_p hdr = {.type = TYPE_TELEM, .subtype = TELEM_ARM};
+                                       arm_lvl_e arm_lvl = padstate_get_level(state);
+                                       arm_state_p body = {.time = time_ms, .state = arm_lvl};
 
-        struct iovec pkt[2] = {
-            {.iov_base = &hdr, .iov_len = sizeof(hdr)},
-            {.iov_base = &body, .iov_len = sizeof(body)},
-        };
-        struct msghdr msg = {
-            .msg_iov = pkt,
-            .msg_iovlen = (sizeof(pkt) / sizeof(struct iovec)),
-        };
-        telemetry_publish(sock, &msg);
-    }
-}
+                                       struct iovec pkt[2] = {
+                                           {.iov_base = &hdr, .iov_len = sizeof(hdr)},
+                                           {.iov_base = &body, .iov_len = sizeof(body)},
+                                       };
+                                       struct msghdr msg = {
+                                           .msg_iov = pkt,
+                                           .msg_iovlen = (sizeof(pkt) / sizeof(struct iovec)),
+                                       };
+                                       telemetry_publish(sock, &msg);
 
-void *telemetry_update_padstate(void *arg) {
-    telemetry_padstate_args_t *args = (telemetry_padstate_args_t *)arg;
-    padstate_t *state = args->state;
+                                       // sending actuator update
+                                       for (int i = 0; i < NUM_ACTUATORS; i++) {
+                                           header_p hdr = {.type = TYPE_TELEM, .subtype = TELEM_ACT};
+                                           bool act_state;
+                                           padstate_get_actstate(state, i, &act_state);
+                                           act_state_p body = {.time = time_ms, .id = i, .state = act_state};
 
-    for (;;) {
-        telemetry_send_padstate(state, args->sock);
+                                           struct iovec pkt[2] = {
+                                               {.iov_base = &hdr, .iov_len = sizeof(hdr)},
+                                               {.iov_base = &body, .iov_len = sizeof(body)},
+                                           };
+                                           struct msghdr msg = {
+                                               .msg_iov = pkt,
+                                               .msg_iovlen = (sizeof(pkt) / sizeof(struct iovec)),
+                                           };
+                                           telemetry_publish(sock, &msg);
+                                       }
+                                   }
 
-        struct timespec cond_timeout;
-        clock_gettime(CLOCK_REALTIME, &cond_timeout);
-        cond_timeout.tv_sec += PADSTATE_UPDATE_TIMEOUT_SEC;
+                                   void *telemetry_update_padstate(void *arg) {
+                                       telemetry_padstate_args_t *args = (telemetry_padstate_args_t *)arg;
+                                       padstate_t *state = args->state;
 
-        // waiting until cond_timedwait times out
-        pthread_mutex_lock(&state->update_mut);
-        while (pthread_cond_timedwait(&state->update_cond, &state->update_mut, &cond_timeout) == 0 &&
-               state->update_recorded == true) {
-            telemetry_send_padstate(state, args->sock);
-            state->update_recorded = false;
-        }
-        pthread_mutex_unlock(&state->update_mut);
-    }
+                                       for (;;) {
+                                           telemetry_send_padstate(state, args->sock);
 
-    thread_return(0);
-}
+                                           struct timespec cond_timeout;
+                                           clock_gettime(CLOCK_REALTIME, &cond_timeout);
+                                           cond_timeout.tv_sec += PADSTATE_UPDATE_TIMEOUT_SEC;
+
+                                           // waiting until cond_timedwait times out
+                                           pthread_mutex_lock(&state->update_mut);
+                                           while (pthread_cond_timedwait(&state->update_cond, &state->update_mut,
+                                                                         &cond_timeout) == 0 &&
+                                                  state->update_recorded == true) {
+                                               telemetry_send_padstate(state, args->sock);
+                                               state->update_recorded = false;
+                                           }
+                                           pthread_mutex_unlock(&state->update_mut);
+                                       }
+
+                                       thread_return(0);
+                                   }
