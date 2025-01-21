@@ -6,3 +6,4 @@
 Make.dep
 .kconfig
 /Kconfig
+*.built
