@@ -97,9 +97,9 @@ typedef struct {
 
 /* Pressure measurement message */
 typedef struct {
-    uint32_t time;     /* Time stamp in milliseconds since power on. */
+    uint32_t time;    /* Time stamp in milliseconds since power on. */
     int32_t pressure; /* Pressure in thousandths of a PSI. */
-    uint8_t id;        /* The ID of the sensor which reported the measurement. */
+    uint8_t id;       /* The ID of the sensor which reported the measurement. */
 } PACKED pressure_p;
 
 /* Mass measurement message */
