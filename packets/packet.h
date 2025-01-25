@@ -98,7 +98,7 @@ typedef struct {
 /* Pressure measurement message */
 typedef struct {
     uint32_t time;     /* Time stamp in milliseconds since power on. */
-    uint32_t pressure; /* Pressure in thousandths of a PSI. */
+    int32_t pressure; /* Pressure in thousandths of a PSI. */
     uint8_t id;        /* The ID of the sensor which reported the measurement. */
 } PACKED pressure_p;
 
@@ -148,7 +148,7 @@ void packet_arm_ack_init(arm_ack_p *ack, arm_ack_status_e status);
 /* TELEMETRY MESSAGES */
 
 void packet_temp_init(temp_p *p, uint8_t id, uint32_t time, int32_t temperature);
-void packet_pressure_init(pressure_p *p, uint8_t id, uint32_t time, uint32_t pressure);
+void packet_pressure_init(pressure_p *p, uint8_t id, uint32_t time, int32_t pressure);
 void packet_mass_init(mass_p *p, uint8_t id, uint32_t time, uint32_t mass);
 void packet_arm_state_init(arm_state_p *p, uint32_t time, arm_lvl_e state);
 void packet_act_state_init(act_state_p *p, uint8_t id, uint32_t time, bool state);

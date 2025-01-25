@@ -98,7 +98,7 @@ static void telemetry_publish_data(telemetry_sock_t *sock, telem_subtype_e type,
                                    void *data) {
     header_p hdr = {.type = TYPE_TELEM, .subtype = type};
     pressure_p pressureBody = {.id = id, .time = time, .pressure = deref(int32_t, data)};
-    temp_p temperatureBody = {.id = id, .time = time, .temperature = deref(uint32_t, data)};
+    temp_p temperatureBody = {.id = id, .time = time, .temperature = deref(int32_t, data)};
     mass_p massBody = {.id = id, .time = time, .mass = deref(uint32_t, data)};
 
     struct iovec pkt[2] = {
