@@ -2,47 +2,18 @@
 #include <fcntl.h>
 #include <pthread.h>
 #include <semaphore.h>
+#include <stdatomic.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 
 #include "actuator.h"
+#include "gpio_actuator.h"
 #include "state.h"
 #include <sys/ioctl.h>
 
 // defined in include/nuttx/ioexpander/gpio.h
 #define GPIOC_WRITE 8961
-
-static int dummy_on(actuator_t *act) {
-    int fd = open("/dev/gpio12", O_RDWR);
-    if (fd < 0) {
-        fprintf(stderr, "Opening gpio failed with err %d\n", errno);
-        return -1;
-    }
-    int err = ioctl(fd, GPIOC_WRITE, true);
-    if (err < 0) {
-        fprintf(stderr, "Ioctl failed with err %d\n", errno);
-        return -1;
-    }
-
-    printf("Actuator #%d turned on\n", act->id);
-    return 0;
-}
-static int dummy_off(actuator_t *act) {
-    int fd = open("/dev/gpio12", O_RDWR);
-    if (fd < 0) {
-        fprintf(stderr, "Opening gpio failed with err %d\n", errno);
-        return -1;
-    }
-    int err = ioctl(fd, GPIOC_WRITE, false);
-    if (err < 0) {
-        fprintf(stderr, "Ioctl failed with err %d\n", errno);
-        return -1;
-    }
-
-    printf("Actuator #%d turned off\n", act->id);
-    return 0;
-}
 
 /* TODO: docs */
 void padstate_init(padstate_t *state) {
@@ -50,62 +21,39 @@ void padstate_init(padstate_t *state) {
     // TODO: Is this right? Can we assume if the program is running then the pad is armed?
     state->arm_level = ARMED_PAD;
     for (unsigned int i = 0; i < NUM_ACTUATORS; i++) {
-        actuator_init(&state->actuators[i], i, dummy_on, dummy_off, NULL);
+        actuator_init(&state->actuators[i], i, gpio_actuator_on, gpio_actuator_off, NULL);
     }
 }
 
 /* TODO: docs
  *
  */
-int padstate_get_level(padstate_t *state, arm_lvl_e *arm_val) {
-    int err;
-    err = pthread_rwlock_rdlock(&state->rw_lock);
-    if (err) return err;
-
-    *arm_val = state->arm_level;
-
-    return pthread_rwlock_unlock(&state->rw_lock);
+arm_lvl_e padstate_get_level(padstate_t *state) {
+    /* Something has gone terribly wrong if reading a variable doesn't work, so no errors are returned from here */
+    return atomic_load_explicit(&state->arm_level, __ATOMIC_ACQUIRE);
 }
 
 /* TODO: docs
  * NOTE: this does not check for valid arming state transitions
+ * NOTE: use in a loop, see arm.c for an example and why
+ * @return 1 for success, 0 for error
  */
-int padstate_change_level(padstate_t *state, arm_lvl_e new_arm) {
-    int err;
-    err = pthread_rwlock_wrlock(&state->rw_lock);
-    if (err) return err;
-
-    state->arm_level = new_arm;
-
-    return pthread_rwlock_unlock(&state->rw_lock);
+int padstate_change_level(padstate_t *state, arm_lvl_e *old_arm, arm_lvl_e new_arm) {
+    return atomic_compare_exchange_weak_explicit(&state->arm_level, old_arm, new_arm, memory_order_release,
+                                                 memory_order_acquire);
 }
 
 /*
- * Changes the state of the actuator in a thread safe way, no checks are done
+ * Obtains state of actuator given id using
  * @param id The actuator id
- * @param new_state The new actuator state
+ * @param act_state Variable to store actuator state
  * @return 0 for success, -1 for error
  */
-int padstate_actuate(padstate_t *state, uint8_t id, bool new_state) {
-    int err;
-    err = pthread_rwlock_wrlock(&state->rw_lock);
-    if (err) return err;
-
-    state->actuators[id].state = new_state;
-
-    return pthread_rwlock_unlock(&state->rw_lock);
-}
-
 int padstate_get_actstate(padstate_t *state, uint8_t act_id, bool *act_state) {
     if (act_id >= NUM_ACTUATORS) return -1;
 
-    int err;
-    err = pthread_rwlock_rdlock(&state->rw_lock);
-    if (err) return err;
-
-    *act_state = state->actuators[act_id].state;
-
-    return pthread_rwlock_unlock(&state->rw_lock);
+    *act_state = atomic_load(&state->actuators[act_id].state);
+    return 0;
 }
 
 /*
@@ -121,17 +69,9 @@ int pad_actuate(padstate_t *state, uint8_t id, uint8_t req_state) {
     if (req_state != 0 && req_state != 1) return ACT_INV;
     bool new_state = (bool)req_state;
 
-    arm_lvl_e arm_lvl;
-    int err = padstate_get_level(state, &arm_lvl);
-    if (err) {
-        errno = err;
-        return -1;
-    }
-
-    fprintf(stderr, "arming level: %d\n", arm_lvl);
+    arm_lvl_e arm_lvl = padstate_get_level(state);
 
     bool is_solenoid_valve = id >= ID_XV1 && id <= ID_XV12;
-    fprintf(stderr, "%ul\n", arm_lvl);
 
     switch (arm_lvl) {
     case ARMED_PAD:
@@ -162,7 +102,7 @@ int pad_actuate(padstate_t *state, uint8_t id, uint8_t req_state) {
     }
 
     bool current_state;
-    err = padstate_get_actstate(state, id, &current_state);
+    int err = padstate_get_actstate(state, id, &current_state);
     if (err) {
         errno = err;
         return -1;
@@ -172,17 +112,8 @@ int pad_actuate(padstate_t *state, uint8_t id, uint8_t req_state) {
         return ACT_OK;
     }
 
-    err = padstate_actuate(state, id, new_state);
-    if (err) {
-        errno = err;
-        return -1;
-    }
+    err = actuator_set(&state->actuators[id], new_state);
 
-    if (new_state == true) {
-        err = actuator_on(&state->actuators[id]);
-    } else {
-        err = actuator_off(&state->actuators[id]);
-    }
     if (err) {
         return -1;
     }
