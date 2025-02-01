@@ -44,7 +44,7 @@ void packet_temp_init(temp_p *p, uint8_t id, uint32_t time, int32_t temperature)
     p->temperature = temperature;
 }
 
-void packet_pressure_init(pressure_p *p, uint8_t id, uint32_t time, uint32_t pressure) {
+void packet_pressure_init(pressure_p *p, uint8_t id, uint32_t time, int32_t pressure) {
     p->id = id;
     p->time = time;
     p->pressure = pressure;
