@@ -1,0 +1,3 @@
+ifneq ($(CONFIG_HYSIM_PAD_SERVER),)
+CONFIGURED_APPS += $(APPDIR)/hysim/pad_server
+endif

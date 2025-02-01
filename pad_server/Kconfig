@@ -1,0 +1,26 @@
+config HYSIM_PAD_SERVER
+        tristate "Pad server"
+        default n
+        ---help---
+                Enable the pad server application for controlling the hybrid
+                rocket control system.
+
+if HYSIM_PAD_SERVER
+
+config HYSIM_PAD_SERVER_PROGNAME
+        string "Program name"
+        default "pad_server"
+        ---help---
+                This is the name of the program that will be used for the
+                pad server application.
+
+config HYSIM_PAD_SERVER_PRIORITY
+        int "Pad server task priority"
+        default 100
+
+config HYSIM_PAD_SERVER_STACKSIZE
+        int "Pad server stack size"
+        default DEFAULT_TASK_STACKSIZE
+
+endif
+

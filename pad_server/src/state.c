@@ -1,4 +1,5 @@
 #include <errno.h>
+#include <fcntl.h>
 #include <pthread.h>
 #include <semaphore.h>
 #include <stdatomic.h>
@@ -9,6 +10,10 @@
 #include "actuator.h"
 #include "gpio_actuator.h"
 #include "state.h"
+#include <sys/ioctl.h>
+
+// defined in include/nuttx/ioexpander/gpio.h
+#define GPIOC_WRITE 8961
 
 /* TODO: docs */
 void padstate_init(padstate_t *state) {

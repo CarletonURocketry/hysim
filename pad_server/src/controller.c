@@ -229,7 +229,6 @@ void *controller_run(void *arg) {
                     }
 
                 } break;
-
                 case CNTRL_ARM_REQ: {
                     arm_req_p req;
                     controller_recv(&controller, &req, sizeof(req)); // TODO: handle recv errors

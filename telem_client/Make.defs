@@ -1,0 +1,3 @@
+ifneq ($(CONFIG_HYSIM_TELEM_CLIENT),)
+CONFIGURED_APPS += $(APPDIR)/hysim/telem_client
+endif

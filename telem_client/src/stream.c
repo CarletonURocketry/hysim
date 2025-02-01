@@ -37,7 +37,7 @@ int stream_init(stream_t *stream, const char *ip, uint16_t port) {
 
     /* Re-use port so testing can be done on the same machine. */
     int reuse = 1;
-    if (setsockopt(stream->sock, SOL_SOCKET, SO_REUSEPORT, &reuse, sizeof(reuse)) == -1) {
+    if (setsockopt(stream->sock, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) == -1) {
         return errno;
     }
 
