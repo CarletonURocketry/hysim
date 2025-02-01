@@ -18,6 +18,7 @@ MAINSRC = src/pad_server_main.c
 
 CSRCS += $(wildcard src/*.c)
 CSRCS += ../packets/packet.c
+CSRCS := $(filter-out src/gpio_actuator.c, $(CSRCS))
 
 include $(APPDIR)/Application.mk
 

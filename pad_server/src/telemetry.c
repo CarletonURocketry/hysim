@@ -334,7 +334,7 @@ void *telemetry_update_padstate(void *arg) {
         // waiting until either the cond times out or an update is received
         // and we confirmed it was not a spurious wakeup
         while (err != ETIMEDOUT && !state->update_recorded) {
-            pthread_cond_timedwait(&state->update_cond, &state->update_mut, &cond_timeout);
+            err = pthread_cond_timedwait(&state->update_cond, &state->update_mut, &cond_timeout);
         }
 
         telemetry_send_padstate(state, args->sock);
