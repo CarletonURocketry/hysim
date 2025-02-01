@@ -40,5 +40,9 @@ int change_arm_level(padstate_t *state, arm_lvl_e new_arm) {
         }
     } while (!err);
 
+    pthread_mutex_lock(&state->update_mut);
+    state->update_recorded = true;
+    pthread_cond_signal(&state->update_cond);
+    pthread_mutex_unlock(&state->update_mut);
     return ARM_OK;
 }

@@ -17,6 +17,9 @@ typedef struct {
     actuator_t actuators[NUM_ACTUATORS];
     _Atomic(arm_lvl_e) arm_level;
     pthread_rwlock_t rw_lock;
+    pthread_mutex_t update_mut;
+    pthread_cond_t update_cond;
+    bool update_recorded;
 } padstate_t;
 
 void padstate_init(padstate_t *state);

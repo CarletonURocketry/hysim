@@ -23,6 +23,10 @@ void padstate_init(padstate_t *state) {
     for (unsigned int i = 0; i < NUM_ACTUATORS; i++) {
         actuator_init(&state->actuators[i], i, gpio_actuator_on, gpio_actuator_off, NULL);
     }
+
+    pthread_mutex_init(&state->update_mut, NULL);
+    pthread_cond_init(&state->update_cond, NULL);
+    state->update_recorded = false;
 }
 
 /* TODO: docs
@@ -108,15 +112,17 @@ int pad_actuate(padstate_t *state, uint8_t id, uint8_t req_state) {
         return -1;
     }
 
-    if (new_state == current_state) {
-        return ACT_OK;
+    if (new_state != current_state) {
+        err = actuator_set(&state->actuators[id], new_state);
+        if (err) {
+            return -1;
+        }
     }
 
-    err = actuator_set(&state->actuators[id], new_state);
-
-    if (err) {
-        return -1;
-    }
+    pthread_mutex_lock(&state->update_mut);
+    state->update_recorded = true;
+    pthread_cond_signal(&state->update_cond);
+    pthread_mutex_unlock(&state->update_mut);
 
     return ACT_OK;
 }
