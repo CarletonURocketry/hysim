@@ -8,7 +8,8 @@ USAGE:
     telem_client [options]
 
 OPTIONS:
-   -a addr The multicast address to listen on.If not specified, address 224.0.0.10 is used.
+   -a addr The multicast address to listen on. If not specified, address
+           239.100.110.210 is used.
 
 EXAMPLES:
-    telem_client -a 224.0.0.10
+    telem_client -a 239.100.110.210

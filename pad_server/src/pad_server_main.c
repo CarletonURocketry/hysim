@@ -18,7 +18,7 @@
 
 #define TELEMETRY_PORT 50002
 #define CONTROL_PORT 50001
-#define MULTICAST_ADDR "224.0.0.10"
+#define MULTICAST_ADDR "239.100.110.210"
 
 padstate_t state;
 
