@@ -176,9 +176,9 @@ static void random_data(telemetry_sock_t *telem) {
         telemetry_publish_data(telem, TELEM_TEMP, 4, time, &temp_i);
 
         mass = (mass + 10) % 4000 + 3900;
-        uint32_t mass_i = mass * 2;
+        uint32_t mass_i = mass + 2;
         telemetry_publish_data(telem, TELEM_MASS, 1, time, &mass_i);
-        mass_i = 2000 + mass * 3;
+        mass_i = mass + 4;
         telemetry_publish_data(telem, TELEM_MASS, 2, time, &mass_i);
 
         time = (time + 1) % 1000000;
