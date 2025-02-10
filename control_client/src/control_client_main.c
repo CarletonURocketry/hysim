@@ -166,8 +166,9 @@ int main(int argc, char **argv) {
                             fprintf(stderr, "Server did not acknowledge actuator request with id %d\n",
                                     actuator->act_id);
                             break;
-                        } else if (err == 0 || (err == -1 && (errno == ECONNREFUSED || errno == ECONNRESET))) {
-                            fprintf(stderr, "Server unreachable... reconnecting\n");
+                        } else if (err == 0 ||
+                                   (err == -1 && (errno == ECONNREFUSED || errno == ECONNRESET || errno == ENOTCONN))) {
+                            fprintf(stderr, "Server unreachable... reconnecting.\n");
                             pad_disconnect(&pad);
                             break;
                         }
@@ -205,8 +206,9 @@ int main(int argc, char **argv) {
                         if (err == -1 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
                             fprintf(stderr, "Server did not acknowledge arming request with level %d\n", arm_req.level);
                             break;
-                        } else if (err == 0 || (err == -1 && (errno == ECONNREFUSED || errno == ECONNRESET))) {
-                            fprintf(stderr, "Server unreachable... reconnecting\n");
+                        } else if (err == 0 ||
+                                   (err == -1 && (errno == ECONNREFUSED || errno == ECONNRESET || errno == ENOTCONN))) {
+                            fprintf(stderr, "Server unreachable... reconnecting.\n");
                             pad_disconnect(&pad);
                             break;
                         }
