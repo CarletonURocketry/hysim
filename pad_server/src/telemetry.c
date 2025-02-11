@@ -165,19 +165,21 @@ static void random_data(telemetry_sock_t *telem) {
         pressure_i = 250 + pressure * 40;
         telemetry_publish_data(telem, TELEM_PRESSURE, 4, time, &pressure_i);
 
-        temperature = (temperature + 1) % 20000 + 20000;
+        temperature = (temperature + 78) % 20000 + 20000;
         int32_t temp_i = temperature - 1;
         telemetry_publish_data(telem, TELEM_TEMP, 1, time, &temp_i);
-        temp_i = temperature + 1;
+        temp_i = 2000 + temperature * 2;
         telemetry_publish_data(telem, TELEM_TEMP, 2, time, &temp_i);
-        temp_i = temperature - 2;
+        temp_i = 3000 + temperature * 3;
         telemetry_publish_data(telem, TELEM_TEMP, 3, time, &temp_i);
-        temp_i = temperature + 2;
+        temp_i = 2500 + temperature * 4;
         telemetry_publish_data(telem, TELEM_TEMP, 4, time, &temp_i);
 
         mass = (mass + 10) % 4000 + 3900;
         uint32_t mass_i = mass + 2;
         telemetry_publish_data(telem, TELEM_MASS, 1, time, &mass_i);
+        mass_i = mass + 4;
+        telemetry_publish_data(telem, TELEM_MASS, 2, time, &mass_i);
 
         time = (time + 1) % 1000000;
         usleep(100000);
