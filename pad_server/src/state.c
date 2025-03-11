@@ -12,16 +12,20 @@
 #include "state.h"
 #include <sys/ioctl.h>
 
-// defined in include/nuttx/ioexpander/gpio.h
-#define GPIOC_WRITE 8961
-
-/* TODO: docs */
+/*
+ * Initialize the shared pad state. This includes initializing the synchronization objects (rwlock), pad arming state
+ * and actuators.
+ * @param state The state to initialize.
+ */
 void padstate_init(padstate_t *state) {
     pthread_rwlock_init(&state->rw_lock, NULL);
+
     // TODO: Is this right? Can we assume if the program is running then the pad is armed?
+    // TODO: make GPIO device path change
+
     state->arm_level = ARMED_PAD;
     for (unsigned int i = 0; i < NUM_ACTUATORS; i++) {
-        actuator_init(&state->actuators[i], i, gpio_actuator_on, gpio_actuator_off, NULL);
+        gpio_actuator_init(&state->actuators[i], i, "dev/gpio3");
     }
 
     pthread_mutex_init(&state->update_mut, NULL);
@@ -29,8 +33,10 @@ void padstate_init(padstate_t *state) {
     state->update_recorded = false;
 }
 
-/* TODO: docs
- *
+/* 
+ * Gets the current arming level of the pad.
+ * @param state The pad state
+ * @return The current arming level
  */
 arm_lvl_e padstate_get_level(padstate_t *state) {
     /* Something has gone terribly wrong if reading a variable doesn't work, so no errors are returned from here */
