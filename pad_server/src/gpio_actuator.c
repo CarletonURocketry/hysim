@@ -70,6 +70,6 @@ static int gpio_actuator_off(actuator_t *act) {
  * @param id The actuator ID
  * @param dev The path to the GPIO character device
  */
-void gpio_actuator_init(actuator_t *act, uint8_t id, char *dev) {
-    actuator_init(act, id, gpio_actuator_on, gpio_actuator_off, dev);
+void gpio_actuator_init(actuator_t *act, uint8_t id, const char *dev) {
+    actuator_init(act, id, gpio_actuator_on, gpio_actuator_off, (char *)dev);
 }
