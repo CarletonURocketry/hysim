@@ -12,16 +12,31 @@
 #include "state.h"
 #include <sys/ioctl.h>
 
-// defined in include/nuttx/ioexpander/gpio.h
-#define GPIOC_WRITE 8961
+static const char *ACTUATOR_GPIO[NUM_ACTUATORS] = {
+    [ID_FIRE_VALVE] = "/dev/gpio27", [ID_XV1] = "/dev/gpio2",
+    [ID_XV2] = "/dev/gpio3",         [ID_XV3] = "/dev/gpio4",
+    [ID_XV4] = "/dev/gpio5",         [ID_XV5] = "/dev/gpio6",
+    [ID_XV6] = "/dev/gpio7",         [ID_XV7] = "/dev/gpio8",
+    [ID_XV8] = "/dev/gpio9",         [ID_XV9] = "/dev/gpio10",
+    [ID_XV10] = "/dev/gpio11",       [ID_XV11] = "/dev/gpio12",
+    [ID_XV12] = "/dev/gpio12",       [ID_QUICK_DISCONNECT] = "/dev/gpio26",
+    [ID_IGNITER] = "/dev/gpio28", // TODO double check?
+};
 
-/* TODO: docs */
+/*
+ * Initialize the shared pad state. This includes initializing the synchronization objects (rwlock), pad arming state
+ * and actuators.
+ * @param state The state to initialize.
+ */
 void padstate_init(padstate_t *state) {
     pthread_rwlock_init(&state->rw_lock, NULL);
+
     // TODO: Is this right? Can we assume if the program is running then the pad is armed?
+    // TODO: make GPIO device path change
+
     state->arm_level = ARMED_PAD;
     for (unsigned int i = 0; i < NUM_ACTUATORS; i++) {
-        actuator_init(&state->actuators[i], i, gpio_actuator_on, gpio_actuator_off, NULL);
+        gpio_actuator_init(&state->actuators[i], i, ACTUATOR_GPIO[i]);
     }
 
     pthread_mutex_init(&state->update_mut, NULL);
@@ -29,8 +44,10 @@ void padstate_init(padstate_t *state) {
     state->update_recorded = false;
 }
 
-/* TODO: docs
- *
+/*
+ * Gets the current arming level of the pad.
+ * @param state The pad state
+ * @return The current arming level
  */
 arm_lvl_e padstate_get_level(padstate_t *state) {
     /* Something has gone terribly wrong if reading a variable doesn't work, so no errors are returned from here */
