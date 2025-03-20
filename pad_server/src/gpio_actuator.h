@@ -1,4 +1,9 @@
 #include "actuator.h"
 
-int gpio_actuator_on(actuator_t *act);
-int gpio_actuator_off(actuator_t *act);
+/*
+ * Initialize a GPIO actuator.
+ * @param act The actuator structure to initialize.
+ * @param id The actuator ID
+ * @param dev The path to the GPIO character device
+ */
+void gpio_actuator_init(actuator_t *act, uint8_t id, const char *dev);
