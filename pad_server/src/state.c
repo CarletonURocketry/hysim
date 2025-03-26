@@ -29,6 +29,7 @@ static const char *ACTUATOR_GPIO[NUM_ACTUATORS] = {
  * @param state The state to initialize.
  */
 void padstate_init(padstate_t *state) {
+    char devpath[20];
     pthread_rwlock_init(&state->rw_lock, NULL);
 
     // TODO: Is this right? Can we assume if the program is running then the pad is armed?
