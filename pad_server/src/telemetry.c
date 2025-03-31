@@ -1,6 +1,7 @@
 #include <arpa/inet.h>
 #include <assert.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <pthread.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -10,6 +11,10 @@
 #include <sys/uio.h>
 #include <time.h>
 #include <unistd.h>
+
+#include <nuttx/analog/adc.h>
+#include <nuttx/analog/ads1115.h>
+#include <nuttx/analog/ioctl.h>
 
 #include "state.h"
 #include "telemetry.h"
@@ -188,6 +193,93 @@ static void random_data(telemetry_sock_t *telem) {
     thread_return(0);
 }
 
+static int adc_read(int adc, struct adc_msg_s *msg) {
+    for (int i = 0; i < 4; i++) {
+        int ret = ioctl(adc, ANIOC_ADS1115_READ_CHANNEL, msg[i]);
+        if (ret < 0) {
+            return ret;
+        }
+    }
+    return 0;
+}
+
+static void adc_data_test(telemetry_sock_t *telem) {
+    uint32_t time = 0;
+
+    /* Open ADCs */
+
+    int adc0 = open("/dev/adc0", O_RDONLY);
+    int adc1 = open("/dev/adc1", O_RDONLY);
+    int adc2 = open("/dev/adc2", O_RDONLY);
+    if (adc0 < 0 || adc1 < 0 || adc2 < 0) {
+        fprintf(stderr, "Could not open ADCs: %s\n", strerror(errno));
+        thread_return(errno);
+    }
+
+    for (;;) {
+
+        /* These are the only important channel for each adc */
+
+        struct adc_msg_s msg[4] = {
+            {.am_channel = 4, .am_data = 0},
+            {.am_channel = 5, .am_data = 0},
+            {.am_channel = 6, .am_data = 0},
+            {.am_channel = 7, .am_data = 0},
+        };
+
+        /* Read ADC0 (0x48)*/
+
+        int ret = adc_read(adc0, msg);
+        if (ret < 0) {
+            fprintf(stderr, "Error reading ADC0: %s\n", strerror(errno));
+            thread_return(ret);
+        }
+
+        /* ADC0 has thermistors 0-1 and pressure tranducers 4-5*/
+
+        telemetry_publish_data(&telem, TELEM_TEMP, 1, time, &msg[0].am_data);
+        telemetry_publish_data(&telem, TELEM_TEMP, 2, time, &msg[1].am_data);
+        telemetry_publish_data(&telem, TELEM_PRESSURE, 5, time, &msg[2].am_data);
+        telemetry_publish_data(&telem, TELEM_PRESSURE, 6, time, &msg[3].am_data);
+
+        /* Read ADC1 (0x49)*/
+
+        ret = adc_read(adc1, msg);
+        if (ret < 0) {
+            fprintf(stderr, "Error reading ADC1: %s\n", strerror(errno));
+            thread_return(ret);
+        }
+
+        /* ADC1 has pressure tranducers 0-3 */
+
+        telemetry_publish_data(&telem, TELEM_PRESSURE, 0, time, &msg[0].am_data);
+        telemetry_publish_data(&telem, TELEM_PRESSURE, 1, time, &msg[1].am_data);
+        telemetry_publish_data(&telem, TELEM_PRESSURE, 2, time, &msg[2].am_data);
+        telemetry_publish_data(&telem, TELEM_PRESSURE, 3, time, &msg[3].am_data);
+
+        /* Read ADC2 (0x4a) */
+
+        ret = adc_read(adc2, msg);
+        if (ret < 0) {
+            fprintf(stderr, "Error reading ADC2: %s\n", strerror(errno));
+            thread_return(ret);
+        }
+
+        telemetry_publish_data(&telem, TELEM_MASS, 1, time, &msg[0].am_data);
+        telemetry_publish_data(&telem, TELEM_MASS, 2, time, &msg[1].am_data);
+
+        /* Probably change to an actual time and update whenever the data is read but whatevs :) */
+        time = (time + 1) % 1000000;
+        usleep(100000);
+    }
+
+    close(adc0);
+    close(adc1);
+    close(adc2);
+
+    thread_return(0);
+}
+
 /*
  * Run the thread responsible for transmitting telemetry data.
  * @param arg The arguments to the telemetry thread, of type `telemetry_args_t`.
@@ -218,7 +310,7 @@ void *telemetry_run(void *arg) {
 
     /* Null telemetry file means nothing to do */
     if (args->data_file == NULL) {
-        random_data(&telem);
+        adc_data_test(&telem);
     }
 
     /* Open telemetry file */
