@@ -11,6 +11,7 @@
 #include <sys/uio.h>
 #include <time.h>
 #include <unistd.h>
+#include <sys/ioctl.h>
 
 #include <nuttx/analog/adc.h>
 #include <nuttx/analog/ads1115.h>
@@ -237,10 +238,10 @@ static void adc_data_test(telemetry_sock_t *telem) {
 
         /* ADC0 has thermistors 0-1 and pressure tranducers 4-5*/
 
-        telemetry_publish_data(&telem, TELEM_TEMP, 1, time, &msg[0].am_data);
-        telemetry_publish_data(&telem, TELEM_TEMP, 2, time, &msg[1].am_data);
-        telemetry_publish_data(&telem, TELEM_PRESSURE, 5, time, &msg[2].am_data);
-        telemetry_publish_data(&telem, TELEM_PRESSURE, 6, time, &msg[3].am_data);
+        telemetry_publish_data(telem, TELEM_TEMP, 1, time, &msg[0].am_data);
+        telemetry_publish_data(telem, TELEM_TEMP, 2, time, &msg[1].am_data);
+        telemetry_publish_data(telem, TELEM_PRESSURE, 5, time, &msg[2].am_data);
+        telemetry_publish_data(telem, TELEM_PRESSURE, 6, time, &msg[3].am_data);
 
         /* Read ADC1 (0x49)*/
 
@@ -252,10 +253,10 @@ static void adc_data_test(telemetry_sock_t *telem) {
 
         /* ADC1 has pressure tranducers 0-3 */
 
-        telemetry_publish_data(&telem, TELEM_PRESSURE, 0, time, &msg[0].am_data);
-        telemetry_publish_data(&telem, TELEM_PRESSURE, 1, time, &msg[1].am_data);
-        telemetry_publish_data(&telem, TELEM_PRESSURE, 2, time, &msg[2].am_data);
-        telemetry_publish_data(&telem, TELEM_PRESSURE, 3, time, &msg[3].am_data);
+        telemetry_publish_data(telem, TELEM_PRESSURE, 1, time, &msg[0].am_data);
+        telemetry_publish_data(telem, TELEM_PRESSURE, 2, time, &msg[1].am_data);
+        telemetry_publish_data(telem, TELEM_PRESSURE, 3, time, &msg[2].am_data);
+        telemetry_publish_data(telem, TELEM_PRESSURE, 4, time, &msg[3].am_data);
 
         /* Read ADC2 (0x4a) */
 
@@ -265,8 +266,8 @@ static void adc_data_test(telemetry_sock_t *telem) {
             thread_return(ret);
         }
 
-        telemetry_publish_data(&telem, TELEM_MASS, 1, time, &msg[0].am_data);
-        telemetry_publish_data(&telem, TELEM_MASS, 2, time, &msg[1].am_data);
+        telemetry_publish_data(telem, TELEM_MASS, 1, time, &msg[0].am_data);
+        telemetry_publish_data(telem, TELEM_MASS, 2, time, &msg[1].am_data);
 
         /* Probably change to an actual time and update whenever the data is read but whatevs :) */
         time = (time + 1) % 1000000;
