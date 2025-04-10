@@ -105,7 +105,7 @@ typedef struct {
 /* Mass measurement message */
 typedef struct {
     uint32_t time; /* Time stamp in milliseconds since power on. */
-    uint32_t mass; /* Mass in grams. */
+    int32_t mass;  /* Mass in grams. */
     uint8_t id;    /* The ID of the sensor which reported the measurement. */
 } PACKED mass_p;
 
