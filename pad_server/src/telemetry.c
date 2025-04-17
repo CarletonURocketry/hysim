@@ -14,6 +14,10 @@
 #include "state.h"
 #include "telemetry.h"
 
+#ifdef CONFIG_UORB
+#include <uORB/uORB.h>
+#endif
+
 /* Helper macro for dereferencing pointers */
 
 #define deref(type, data) *((type *)(data))
@@ -188,6 +192,77 @@ static void random_data(telemetry_sock_t *telem) {
     thread_return(0);
 }
 
+#ifdef CONFIG_SENSORS_NAU7802
+/* A funcion to fetch the sensor mass data
+ * @param sensor_mass The sensor mass object
+ * @param data The data to be fetched
+ * @return 0 for success, error code on failure
+ */
+int sensor_mass_fetch(sensor_mass_t *sensor_mass, struct sensor_force *data) {
+    int err = 0;
+    bool update = false;
+    err = orb_check(sensor_mass->imu, &update);
+    if (err < 0) {
+        return err;
+    }
+
+    return orb_copy(sensor_mass->imu_meta, sensor_mass->imu, data);
+}
+
+/* A function to initialize the mass sensor with UORB
+ * @param sensor_mass The sensor mass object
+ * @return 0 for success, error code on failure
+ */
+int sensor_mass_init(sensor_mass_t *sensor_mass) {
+    char *name = "sensor_force0";
+
+    sensor_mass->imu_meta = orb_get_meta(name);
+
+    if (sensor_mass->imu_meta == NULL) {
+        return -1;
+    }
+
+    sensor_mass->imu = orb_subscribe(sensor_mass->imu_meta);
+    if (sensor_mass->imu < 0) {
+        return -1;
+    }
+
+    return 0;
+}
+
+/* A function to calibrate the mass sensor zero point
+ * @param sensor_mass The sensor mass object
+ * @return 0 for success, error code on failure
+ */
+int sensor_mass_calibrate(sensor_mass_t *sensor_mass) {
+    struct sensor_force data;
+    int err = 0;
+
+    /* Flush 10 readings */
+    for (int i = 0; i < 10; i++) {
+        err = sensor_mass_fetch(sensor_mass, &data);
+        if (err < 0) {
+            i--;
+        }
+        usleep(100000);
+    }
+
+    /* Get the zero point */
+    sensor_mass->zero_point = 0;
+    for (int i = 0; i < 10; i++) {
+        err = sensor_mass_fetch(sensor_mass, &data);
+        if (err < 0) {
+            i--;
+        } else {
+            sensor_mass->zero_point += data.force / 10;
+        }
+        usleep(100000);
+    }
+
+    return 0;
+}
+#endif /* CONFIG_SENSOR_NAU7802 */
+
 /*
  * Run the thread responsible for transmitting telemetry data.
  * @param arg The arguments to the telemetry thread, of type `telemetry_args_t`.
@@ -215,6 +290,59 @@ void *telemetry_run(void *arg) {
         thread_return(err);
     }
     pthread_cleanup_push(telemetry_cancel_padstate_thread, &telemetry_padstate_thread);
+
+#ifdef CONFIG_SENSORS_NAU7802
+
+    /* Reading mass data */
+    sensor_mass_t sensor_mass;
+
+    err = sensor_mass_init(&sensor_mass);
+    if (err < 0) {
+        fprintf(stderr, "Could not initialize mass sensor: %d\n", err);
+        thread_return(err);
+    }
+
+    err = sensor_mass_calibrate(&sensor_mass);
+    if (err < 0) {
+        fprintf(stderr, "Could not calibrate mass sensor: %d\n", err);
+        thread_return(err);
+    }
+
+    /* Hardcoded values from load calibration */
+    sensor_mass.known_mass_point = 60000;
+    sensor_mass.known_mass_grams = 1000;
+
+    struct sensor_force mass_data;
+
+    while (true) {
+        err = sensor_mass_fetch(&sensor_mass, &mass_data);
+        if (err < 0) {
+            fprintf(stderr, "Error fetching mass data\n");
+        } else {
+            struct timespec time;
+            clock_gettime(CLOCK_MONOTONIC, &time);
+            uint32_t time_ms = time.tv_sec * 1000 + time.tv_nsec / 1000000;
+            int32_t mass = sensor_mass.known_mass_grams * (mass_data.force - sensor_mass.zero_point) /
+                           (sensor_mass.known_mass_point - sensor_mass.zero_point);
+
+            header_p hdr = {.type = TYPE_TELEM, .subtype = TELEM_MASS};
+            mass_p body = {.id = 1, .time = time_ms, .mass = mass};
+
+            struct iovec pkt[2] = {
+                {.iov_base = &hdr, .iov_len = sizeof(hdr)},
+                {.iov_base = &body, .iov_len = sizeof(body)},
+            };
+            struct msghdr msg = {
+                .msg_iov = pkt,
+                .msg_iovlen = (sizeof(pkt) / sizeof(struct iovec)),
+            };
+            telemetry_publish(&telem, &msg);
+        }
+        usleep(100000);
+    }
+
+    orb_unsubscribe(sensor_mass.imu);
+#endif /* CONFIG_NAU7802 */
 
     /* Null telemetry file means nothing to do */
     if (args->data_file == NULL) {

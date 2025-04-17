@@ -118,7 +118,7 @@ int main(int argc, char **argv) {
         case TELEM_MASS: {
             b_read = stream_recv(&telem_stream, &buffer, sizeof(mass_p) + sizeof(hdr));
             mass_p *mass = (mass_p *)&buffer[sizeof(hdr)];
-            printf("Load cell #%u: %u kg @ %u ms\n", mass->id, mass->mass / 1000, mass->time);
+            printf("Load cell #%u: %d kg @ %u ms\n", mass->id, mass->mass / 1000, mass->time);
         } break;
         case TELEM_ACT: {
             b_read = stream_recv(&telem_stream, &buffer, sizeof(act_state_p) + sizeof(hdr));
