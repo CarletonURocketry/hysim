@@ -65,9 +65,11 @@ static int controller_init(controller_t *controller, uint16_t port) {
     err = setsockopt(controller->sock, IPPROTO_TCP, TCP_KEEPINTVL, &int_secs, sizeof(int));
     if (err < 0) return errno;
 
+#ifndef __APPLE__
     /* Idle `int_secs` before starting to probe with keep-alive ACKS */
     err = setsockopt(controller->sock, IPPROTO_TCP, TCP_KEEPIDLE, &int_secs, sizeof(int));
     if (err < 0) return errno;
+#endif
 
     int count = KEEPALIVE_N_PROBES; /* Gives 10 probes (10 * `int_secs` seconds) to regain connection */
     err = setsockopt(controller->sock, IPPROTO_TCP, TCP_KEEPCNT, &count, sizeof(int));
