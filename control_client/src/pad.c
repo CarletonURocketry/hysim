@@ -1,6 +1,7 @@
 #include <arpa/inet.h>
 #include <errno.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <stdint.h>
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -28,7 +29,9 @@ int pad_init(pad_t *pad, const char *ip, uint16_t port) {
     struct timeval tv;
     tv.tv_sec = RCVTIMEO_SEC;
     tv.tv_usec = 0;
-    setsockopt(pad->sock, SOL_SOCKET, SO_RCVTIMEO, (const char *)&tv, sizeof tv);
+    if (setsockopt(pad->sock, SOL_SOCKET, SO_RCVTIMEO, (const char *)&tv, sizeof tv) < 0) {
+        return errno;
+    }
 #endif /* defined(CONFIG_CLOCK_TIMEKEEPING) */
 
     /* Create address */

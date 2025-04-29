@@ -1,4 +1,5 @@
 #include <errno.h>
+#include <netinet/tcp.h>
 #include <semaphore.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -14,6 +15,14 @@
 /* Helper function for returning an error code from a thread */
 #define thread_return(e) pthread_exit((void *)(unsigned long)((e)))
 
+#ifndef KEEPALIVE_N_PROBES
+#define KEEPALIVE_N_PROBES 10
+#endif
+
+#ifndef KEEPALIVE_INTERVAL_SECS
+#define KEEPALIVE_INTERVAL_SECS 60
+#endif
+
 /*
  * Initializes the controller to be ready to create a TCP connection.
  * @param controller The controller to initialize.
@@ -21,13 +30,17 @@
  * @return 0 for success, or the error that occurred.
  */
 static int controller_init(controller_t *controller, uint16_t port) {
+    int err;
 
     /* Initialize the socket connection. */
     controller->sock = socket(AF_INET, SOCK_STREAM, 0);
     if (controller->sock < 0) return errno;
 
     int opt = 1;
-    setsockopt(controller->sock, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+    err = setsockopt(controller->sock, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+    if (err < 0) {
+        return errno;
+    }
 
     /* Create address */
     controller->addr.sin_family = AF_INET;
@@ -40,6 +53,25 @@ static int controller_init(controller_t *controller, uint16_t port) {
     if (bind(controller->sock, (struct sockaddr *)&controller->addr, sizeof(controller->addr)) < 0) {
         return errno;
     }
+
+    /* Set up keep-alive options */
+
+    int keepalive = 1;
+    err = setsockopt(controller->sock, SOL_SOCKET, SO_KEEPALIVE, (void *)&keepalive, sizeof(keepalive));
+    if (err < 0) return errno;
+
+    /* Each interval between ACK probes is `int_secs` long */
+    int int_secs = KEEPALIVE_INTERVAL_SECS;
+    err = setsockopt(controller->sock, IPPROTO_TCP, TCP_KEEPINTVL, &int_secs, sizeof(int));
+    if (err < 0) return errno;
+
+    /* Idle `int_secs` before starting to probe with keep-alive ACKS */
+    err = setsockopt(controller->sock, IPPROTO_TCP, TCP_KEEPIDLE, &int_secs, sizeof(int));
+    if (err < 0) return errno;
+
+    int count = KEEPALIVE_N_PROBES; /* Gives 10 probes (10 * `int_secs` seconds) to regain connection */
+    err = setsockopt(controller->sock, IPPROTO_TCP, TCP_KEEPCNT, &count, sizeof(int));
+    if (err < 0) return errno;
 
     return 0;
 }
@@ -171,6 +203,12 @@ void *controller_run(void *arg) {
                 bread = controller_recv(&controller, (char *)&hdr + total_read, sizeof(hdr) - total_read);
                 if (bread == -1) {
                     fprintf(stderr, "Error reading message header: %s\n", strerror(errno));
+
+                    if (errno == ECONNRESET) {
+                        // TODO: this should trigger an abort because it happens when TCP keep-alive is done
+                        fprintf(stderr, "Lost connection! ABORT!\n");
+                    }
+
                     break;
                 } else if (bread == 0) {
                     fprintf(stderr, "Control box disconnected.\n");
