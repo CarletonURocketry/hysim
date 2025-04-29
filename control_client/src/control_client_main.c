@@ -1,19 +1,30 @@
 #include "errno.h"
 #include <arpa/inet.h>
+#include <fcntl.h>
 #include <signal.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
+
+#ifndef DESKTOP_BUILD
+#include <nuttx/ioexpander/gpio.h>
+#endif
 
 #include "../../packets/packet.h"
 #include "../../pad_server/src/actuator.h"
 #include "helptext.h"
 #include "pad.h"
 #include "switch.h"
+
+#define INTERRUPT_SIGNAL SIGUSR1
+#define DEBOUNCE_US 5000
+
+#define array_len(arr) (sizeof(arr) / sizeof(arr[0]))
 
 typedef struct {
     uint8_t level;
@@ -46,16 +57,32 @@ static switch_t switches[] = {
 
     /* Arming level commands */
 
-    {.kind = CNTRL_ARM_REQ, .state = false, .act_id = ARMED_PAD},
-    {.kind = CNTRL_ARM_REQ, .state = false, .act_id = ARMED_VALVES},
-    {.kind = CNTRL_ARM_REQ, .state = false, .act_id = ARMED_IGNITION},
-    {.kind = CNTRL_ARM_REQ, .state = false, .act_id = ARMED_DISCONNECTED},
-    {.kind = CNTRL_ARM_REQ, .state = false, .act_id = ARMED_LAUNCH},
-    {.kind = CNTRL_ARM_REQ, .state = false, .act_id = 5},
-    {.kind = CNTRL_ARM_REQ, .state = false, .act_id = 6},
-    {.kind = CNTRL_ARM_REQ, .state = false, .act_id = 7},
+    {.act_id = ARMED_PAD, .state = false, .kind = CNTRL_ARM_REQ},
+    {.act_id = ARMED_VALVES, .state = false, .kind = CNTRL_ARM_REQ},
+    {.act_id = ARMED_IGNITION, .state = false, .kind = CNTRL_ARM_REQ},
+    {.act_id = ARMED_DISCONNECTED, .state = false, .kind = CNTRL_ARM_REQ},
+    {.act_id = ARMED_LAUNCH, .state = false, .kind = CNTRL_ARM_REQ},
 };
 
+#ifndef DESKTOP_BUILD
+static const char *ACTUATOR_IN[] = {
+    [ID_XV1] = "/dev/gpio2",         [ID_XV2] = "/dev/gpio3",
+    [ID_XV3] = "/dev/gpio4",         [ID_XV4] = "/dev/gpio5",
+    [ID_XV5] = "/dev/gpio6",         [ID_XV6] = "/dev/gpio7",
+    [ID_XV7] = "/dev/gpio8",         [ID_XV8] = "/dev/gpio9",
+    [ID_XV9] = "/dev/gpio10",        [ID_XV10] = "/dev/gpio11",
+    [ID_XV11] = "/dev/gpio12",       [ID_XV12] = "/dev/gpio13",
+    [ID_IGNITER] = "/dev/gpio26",    [ID_QUICK_DISCONNECT] = "/dev/gpio28",
+    [ID_FIRE_VALVE] = "/dev/gpio27",
+};
+
+static const char *ARM_IN[] = {
+    [ARMED_PAD] = NULL,          [ARMED_VALVES] = NULL, [ARMED_IGNITION] = NULL,
+    [ARMED_DISCONNECTED] = NULL, [ARMED_LAUNCH] = NULL,
+};
+#endif
+
+#ifdef DESKTOP_BUILD
 static command_t commands[] = {
     {.key = 'q', .sw = &switches[0]},  {.key = 'w', .sw = &switches[1]},  {.key = 'e', .sw = &switches[2]},
     {.key = 'r', .sw = &switches[3]},  {.key = 't', .sw = &switches[4]},  {.key = 'y', .sw = &switches[5]},
@@ -63,23 +90,71 @@ static command_t commands[] = {
     {.key = 'a', .sw = &switches[9]},  {.key = 's', .sw = &switches[10]}, {.key = 'd', .sw = &switches[11]},
     {.key = 'f', .sw = &switches[12]}, {.key = 'g', .sw = &switches[13]}, {.key = 'h', .sw = &switches[14]},
     {.key = 'z', .sw = &switches[15]}, {.key = 'x', .sw = &switches[16]}, {.key = 'c', .sw = &switches[17]},
-    {.key = 'v', .sw = &switches[18]}, {.key = 'b', .sw = &switches[19]}, {.key = 'n', .sw = &switches[20]},
-    {.key = 'm', .sw = &switches[21]}, {.key = ',', .sw = &switches[22]},
+    {.key = 'v', .sw = &switches[18]}, {.key = 'b', .sw = &switches[19]},
 };
+#endif
 
 uint16_t port = 50001; /* Default port */
 pad_t pad;
 arm_t arm;
 
-void handle_term(int sig) {
+static void handle_term(int sig) {
     (void)sig;
     pad_disconnect(&pad);
+    // TODO: current limitation is that you cannot CTRL + C on NuttX since we do not unregister the signal events for
+    // each GPIO pin on exit.
     exit(EXIT_SUCCESS);
 }
 
+#ifndef DESKTOP_BUILD
+static int debounce_read(int fd, unsigned int *final) {
+    int err;
+    unsigned int prev_value;
+    unsigned int value;
+
+    err = ioctl(fd, GPIOC_READ, (unsigned long)((uintptr_t)&prev_value));
+    if (err) return err;
+    value = !prev_value;
+
+    for (;;) {
+
+        usleep(DEBOUNCE_US); /* Debounce */
+
+        err = ioctl(fd, GPIOC_READ, (unsigned long)((uintptr_t)&value));
+        if (err) return err;
+
+        /* If values are the same, then debounce correct */
+
+        if (prev_value == value) {
+            *final = value;
+            return 0;
+        }
+
+        /* Otherwise try again */
+
+        prev_value = value;
+    }
+
+    return EIO;
+}
+#endif
+
 int main(int argc, char **argv) {
+
     char *ip = "127.0.0.1";
     pad.sock = -1;
+    int err;
+#ifdef DESKTOP_BUILD
+    char key;
+#else
+    struct sigevent notify;
+    siginfo_t signal_info;
+    sigset_t set;
+    unsigned int invalue;
+    const char *gpio_dev;
+    int fd;
+    switch_t *signal_sw;
+#endif
 
     /* Parse command line options. */
 
@@ -110,11 +185,51 @@ int main(int argc, char **argv) {
         }
     }
 
-    int err;
+    /* Handle keyboard interrupt */
 
     signal(SIGINT, handle_term);
 
-    char key;
+#ifndef DESKTOP_BUILD
+    /* Register all control switches as interrupts */
+
+    notify.sigev_notify = SIGEV_SIGNAL;
+    notify.sigev_signo = INTERRUPT_SIGNAL;
+
+    for (int i = 0; i < array_len(switches); i++) {
+
+        if (switches[i].kind == CNTRL_ACT_REQ) {
+            gpio_dev = ACTUATOR_IN[switches[i].act_id];
+        } else {
+            gpio_dev = ARM_IN[switches[i].act_id];
+        }
+
+        if (gpio_dev == NULL) {
+            fprintf(stderr, "Skipping NULL gpio device.\n");
+            continue;
+        }
+
+        fd = open(gpio_dev, O_RDWR);
+        if (fd < 0) {
+            fprintf(stderr, "Couldn't open '%s': %d\n", gpio_dev, errno);
+            return EXIT_FAILURE;
+        }
+
+        /* Set up to receive signal */
+
+        notify.sigev_value.sival_ptr = &switches[i];
+        err = ioctl(fd, GPIOC_REGISTER, (unsigned long)&notify);
+        if (err < 0) {
+            fprintf(stderr, "Failed to register interrupt for %s: %d\n", gpio_dev, errno);
+            close(fd);
+            return EXIT_FAILURE;
+        }
+
+        close(fd);
+    }
+#endif
+
+    /* Connect to pad indefinitely */
+
     for (;;) {
         fprintf(stderr, "Waiting for pad...\n");
         err = pad_init(&pad, ip, port);
@@ -135,6 +250,7 @@ int main(int argc, char **argv) {
 
         for (;;) {
 
+#ifdef DESKTOP_BUILD
             printf("Press key and hit enter: ");
             key = getc(stdin);
             if (key != '\n') {
@@ -149,6 +265,60 @@ int main(int argc, char **argv) {
                     fprintf(stderr, "Invalid key: %c\n", key);
                 }
             }
+#else
+            /* Create a signal set containing the GPIO interrupt signal */
+
+            sigemptyset(&set);
+            sigaddset(&set, INTERRUPT_SIGNAL);
+
+            /* Wait for a signal to be sent indefinitely */
+
+            err = sigwaitinfo(&set, &signal_info);
+
+            if (err < 0) {
+                err = errno;
+                if (err == EAGAIN) {
+                    /* Timed out */
+                    continue;
+                } else {
+                    fprintf(stderr, "Failed to wait for interrupt: %d\n", err);
+                    continue;
+                }
+            }
+
+            /* Signal was received, call the correct switch handler for the signal */
+
+            signal_sw = signal_info.si_value.sival_ptr;
+
+            if (signal_sw->kind == CNTRL_ACT_REQ) {
+                /* GPIO is from actuator set */
+                gpio_dev = ACTUATOR_IN[signal_sw->act_id];
+            } else {
+                /* GPIO is from arming set */
+                gpio_dev = ARM_IN[signal_sw->act_id];
+            }
+
+            /* Read the GPIO pin for the real value */
+
+            fd = open(gpio_dev, O_RDONLY);
+            if (fd < 0) {
+                err = errno;
+                fprintf(stderr, "Could not open GPIO '%s': %d\n", gpio_dev, errno);
+                continue;
+            }
+
+            err = debounce_read(fd, &invalue);
+            close(fd);
+
+            if (err < 0) {
+                err = errno;
+                fprintf(stderr, "Failed to re-read value from %s: %d\n", gpio_dev, errno);
+                continue;
+            }
+
+            /* Call the correct switch callback */
+            err = switch_callback(signal_sw, &pad, invalue);
+#endif
 
             /* Print a helpful error message */
 
@@ -169,8 +339,8 @@ int main(int argc, char **argv) {
                 break;
             }
 
-            if (err) {
-                // TODO: be graceful?
+            if (err == ENOTCONN) {
+                /* Try to re-connect */
                 break;
             }
         }
