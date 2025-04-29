@@ -135,6 +135,11 @@ int main(int argc, char **argv) {
             warn_p *warn = (warn_p *)&buffer[sizeof(hdr)];
             printf("WARNING: %s # %u ms\n", warning_str(warn->type), warn->time);
         } break;
+        case TELEM_CONT: {
+            b_read = stream_recv(&telem_stream, &buffer, sizeof(hdr) + sizeof(continuity_state_p));
+            continuity_state_p *continuity = (continuity_state_p *)&buffer[sizeof(hdr)];
+            printf("Continuity sensor: %s # %u ms\n", continuity->state ? "closed" : "open", continuity->time);
+        } break;
         }
     }
 

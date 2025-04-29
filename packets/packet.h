@@ -36,6 +36,7 @@ typedef enum {
     TELEM_ARM = 3,      /* Arming state */
     TELEM_ACT = 4,      /* Actuator state */
     TELEM_WARN = 5,     /* Warning message */
+    TELEM_CONT = 6,     /* Continuity measurement */
 } telem_subtype_e;
 
 /* CONTROL MESSAGES */
@@ -134,6 +135,17 @@ typedef enum {
     WARN_HIGH_TEMP = 1,     /* Temperature levels have exceeded the threshold and manual intervention is required. */
 } warn_type_e;
 
+/* Continuity state message */
+typedef struct {
+    uint32_t time; /* Time stamp in milliseconds since power on. */
+    uint8_t state; /* The current state of the continuity check. */
+} PACKED continuity_state_p;
+
+typedef enum {
+    CONTINUITY_LOW = 0,  /* Continuity sensor is reading low, circuit is open. */
+    CONTINUITY_HIGH = 1, /* Continuity sensor is reading high, circuit is cloesed. */
+} continuity_state_e;
+
 /* PACKET HEADERS */
 
 void packet_header_init(header_p *hdr, packet_type_e type, uint8_t subtype);
@@ -153,6 +165,7 @@ void packet_mass_init(mass_p *p, uint8_t id, uint32_t time, uint32_t mass);
 void packet_arm_state_init(arm_state_p *p, uint32_t time, arm_lvl_e state);
 void packet_act_state_init(act_state_p *p, uint8_t id, uint32_t time, bool state);
 void packet_warn_init(warn_p *p, uint32_t time, warn_type_e type);
+void packet_continuity_state_init(continuity_state_p *p, uint32_t time, continuity_state_e state);
 
 const char *warning_str(warn_type_e warning);
 const char *arm_state_str(arm_lvl_e state);

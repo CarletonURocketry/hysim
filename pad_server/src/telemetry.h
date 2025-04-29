@@ -27,14 +27,6 @@ typedef struct {
     char *data_file;
 } telemetry_args_t;
 
-typedef struct {
-    const struct orb_metadata *imu_meta;
-    int imu;
-    long zero_point;       /* Zero point of the sensor */
-    long known_mass_grams; /* Calibration weight in grams */
-    long known_mass_point; /* Calibration weight value */
-} sensor_mass_t;
-
 void *telemetry_run(void *arg);
 void *telemetry_update_padstate(void *arg);
 void telemetry_send_padstate(padstate_t *state, telemetry_sock_t *sock);

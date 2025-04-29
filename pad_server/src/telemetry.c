@@ -1,6 +1,7 @@
 #include <arpa/inet.h>
 #include <assert.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <pthread.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -11,12 +12,9 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "sensors.h"
 #include "state.h"
 #include "telemetry.h"
-
-#ifdef CONFIG_UORB
-#include <uORB/uORB.h>
-#endif
 
 /* Helper macro for dereferencing pointers */
 
@@ -102,33 +100,45 @@ static void cancel_wrapper(void *arg) { pthread_cancel(*(pthread_t *)(arg)); }
  */
 static void telemetry_publish_data(telemetry_sock_t *sock, telem_subtype_e type, uint8_t id, uint32_t time,
                                    void *data) {
+
     header_p hdr = {.type = TYPE_TELEM, .subtype = type};
-    pressure_p pressureBody = {.id = id, .time = time, .pressure = deref(int32_t, data)};
-    temp_p temperatureBody = {.id = id, .time = time, .temperature = deref(int32_t, data)};
-    mass_p massBody = {.id = id, .time = time, .mass = deref(uint32_t, data)};
+    pressure_p pressure_body;
+    mass_p mass_body;
+    temp_p temperature_body;
+    continuity_state_p continuity_body;
 
     struct iovec pkt[2] = {
         {.iov_base = &hdr, .iov_len = sizeof(hdr)},
     };
 
-    /* Create the appropriate body base on type*/
-
     switch (type) {
-    case TELEM_PRESSURE: {
-        pkt[1].iov_base = &pressureBody;
-        pkt[1].iov_len = sizeof(pressureBody);
+    case TELEM_PRESSURE:
+        pressure_body.id = id;
+        pressure_body.time = time;
+        pressure_body.pressure = deref(int32_t, data);
+        pkt[1].iov_base = &pressure_body;
+        pkt[1].iov_len = sizeof(pressure_body);
         break;
-    }
-    case TELEM_MASS: {
-        pkt[1].iov_base = &massBody;
-        pkt[1].iov_len = sizeof(massBody);
+    case TELEM_MASS:
+        mass_body.id = id;
+        mass_body.time = time;
+        mass_body.mass = deref(uint32_t, data);
+        pkt[1].iov_base = &mass_body;
+        pkt[1].iov_len = sizeof(mass_body);
         break;
-    }
-    case TELEM_TEMP: {
-        pkt[1].iov_base = &temperatureBody;
-        pkt[1].iov_len = sizeof(temperatureBody);
+    case TELEM_TEMP:
+        temperature_body.id = id;
+        temperature_body.time = time;
+        temperature_body.temperature = deref(int32_t, data);
+        pkt[1].iov_base = &temperature_body;
+        pkt[1].iov_len = sizeof(temperature_body);
         break;
-    }
+    case TELEM_CONT:
+        continuity_body.time = time;
+        continuity_body.state = deref(continuity_state_e, data);
+        pkt[1].iov_base = &continuity_body;
+        pkt[1].iov_len = sizeof(continuity_body);
+        break;
     default:
         fprintf(stderr, "Invalid telemetry data type: %u\n", type);
         return;
@@ -192,77 +202,6 @@ static void random_data(telemetry_sock_t *telem) {
     thread_return(0);
 }
 
-#ifdef CONFIG_SENSORS_NAU7802
-/* A funcion to fetch the sensor mass data
- * @param sensor_mass The sensor mass object
- * @param data The data to be fetched
- * @return 0 for success, error code on failure
- */
-int sensor_mass_fetch(sensor_mass_t *sensor_mass, struct sensor_force *data) {
-    int err = 0;
-    bool update = false;
-    err = orb_check(sensor_mass->imu, &update);
-    if (err < 0) {
-        return err;
-    }
-
-    return orb_copy(sensor_mass->imu_meta, sensor_mass->imu, data);
-}
-
-/* A function to initialize the mass sensor with UORB
- * @param sensor_mass The sensor mass object
- * @return 0 for success, error code on failure
- */
-int sensor_mass_init(sensor_mass_t *sensor_mass) {
-    char *name = "sensor_force0";
-
-    sensor_mass->imu_meta = orb_get_meta(name);
-
-    if (sensor_mass->imu_meta == NULL) {
-        return -1;
-    }
-
-    sensor_mass->imu = orb_subscribe(sensor_mass->imu_meta);
-    if (sensor_mass->imu < 0) {
-        return -1;
-    }
-
-    return 0;
-}
-
-/* A function to calibrate the mass sensor zero point
- * @param sensor_mass The sensor mass object
- * @return 0 for success, error code on failure
- */
-int sensor_mass_calibrate(sensor_mass_t *sensor_mass) {
-    struct sensor_force data;
-    int err = 0;
-
-    /* Flush 10 readings */
-    for (int i = 0; i < 10; i++) {
-        err = sensor_mass_fetch(sensor_mass, &data);
-        if (err < 0) {
-            i--;
-        }
-        usleep(100000);
-    }
-
-    /* Get the zero point */
-    sensor_mass->zero_point = 0;
-    for (int i = 0; i < 10; i++) {
-        err = sensor_mass_fetch(sensor_mass, &data);
-        if (err < 0) {
-            i--;
-        } else {
-            sensor_mass->zero_point += data.force / 10;
-        }
-        usleep(100000);
-    }
-
-    return 0;
-}
-#endif /* CONFIG_SENSOR_NAU7802 */
-
 /*
  * Run the thread responsible for transmitting telemetry data.
  * @param arg The arguments to the telemetry thread, of type `telemetry_args_t`.
@@ -291,58 +230,163 @@ void *telemetry_run(void *arg) {
     }
     pthread_cleanup_push(telemetry_cancel_padstate_thread, &telemetry_padstate_thread);
 
-#ifdef CONFIG_SENSORS_NAU7802
+#if defined(CONFIG_SENSORS_NAU7802) && defined(CONFIG_ADC_ADS1115)
 
-    /* Reading mass data */
-    sensor_mass_t sensor_mass;
+    sensor_mass_t sensor_mass = {
+        .known_mass_grams = SENSOR_MASS_KNOWN_WEIGHT, .known_mass_point = SENSOR_MASS_KNOWN_POINT, .available = true};
 
     err = sensor_mass_init(&sensor_mass);
     if (err < 0) {
         fprintf(stderr, "Could not initialize mass sensor: %d\n", err);
-        thread_return(err);
+        sensor_mass.available = false;
     }
 
-    err = sensor_mass_calibrate(&sensor_mass);
-    if (err < 0) {
-        fprintf(stderr, "Could not calibrate mass sensor: %d\n", err);
-        thread_return(err);
-    }
-
-    /* Hardcoded values from load calibration */
-    sensor_mass.known_mass_point = 60000;
-    sensor_mass.known_mass_grams = 1000;
-
-    struct sensor_force mass_data;
-
-    while (true) {
-        err = sensor_mass_fetch(&sensor_mass, &mass_data);
+    if (sensor_mass.available) {
+        err = sensor_mass_calibrate(&sensor_mass);
         if (err < 0) {
-            fprintf(stderr, "Error fetching mass data\n");
-        } else {
-            struct timespec time;
-            clock_gettime(CLOCK_MONOTONIC, &time);
-            uint32_t time_ms = time.tv_sec * 1000 + time.tv_nsec / 1000000;
-            int32_t mass = sensor_mass.known_mass_grams * (mass_data.force - sensor_mass.zero_point) /
-                           (sensor_mass.known_mass_point - sensor_mass.zero_point);
-
-            header_p hdr = {.type = TYPE_TELEM, .subtype = TELEM_MASS};
-            mass_p body = {.id = 1, .time = time_ms, .mass = mass};
-
-            struct iovec pkt[2] = {
-                {.iov_base = &hdr, .iov_len = sizeof(hdr)},
-                {.iov_base = &body, .iov_len = sizeof(body)},
-            };
-            struct msghdr msg = {
-                .msg_iov = pkt,
-                .msg_iovlen = (sizeof(pkt) / sizeof(struct iovec)),
-            };
-            telemetry_publish(&telem, &msg);
+            fprintf(stderr, "Could not calibrate mass sensor: %d\n", err);
+            sensor_mass.available = false;
         }
-        usleep(100000);
     }
 
-    orb_unsubscribe(sensor_mass.imu);
-#endif /* CONFIG_NAU7802 */
+    adc_device_t adc_devices[] = {
+        {.id = 0,
+         .fd = -1,
+         .devpath = "/dev/adc0", /* 0x48 */
+         .n_channels = 4,
+         .channels = {{.channel_num = 4,
+                       .sensor_id = 0,
+                       .type = TELEM_TEMP,
+                       .v_min = 0,
+                       .v_max = 5,
+                       .val_min = 0,
+                       .val_max = 1},
+                      {.channel_num = 5,
+                       .sensor_id = 1,
+                       .type = TELEM_TEMP,
+                       .v_min = 0,
+                       .v_max = 5,
+                       .val_min = 0,
+                       .val_max = 1},
+                      {.channel_num = 6,
+                       .sensor_id = 4,
+                       .type = TELEM_PRESSURE,
+                       .v_min = 1,
+                       .v_max = 5,
+                       .val_min = 0,
+                       .val_max = 1000},
+                      {.channel_num = 7,
+                       .sensor_id = 5,
+                       .type = TELEM_PRESSURE,
+                       .v_min = 1,
+                       .v_max = 5,
+                       .val_min = 0,
+                       .val_max = 1000}}},
+        {.id = 1,
+         .fd = -1,
+         .devpath = "/dev/adc1", /* 0x49 */
+         .n_channels = 4,
+         .channels = {{.channel_num = 4,
+                       .sensor_id = 0,
+                       .type = TELEM_PRESSURE,
+                       .v_min = 1,
+                       .v_max = 5,
+                       .val_min = 0,
+                       .val_max = 2500},
+                      {.channel_num = 5,
+                       .sensor_id = 1,
+                       .type = TELEM_PRESSURE,
+                       .v_min = 1,
+                       .v_max = 5,
+                       .val_min = 0,
+                       .val_max = 2500},
+                      {.channel_num = 6,
+                       .sensor_id = 2,
+                       .type = TELEM_PRESSURE,
+                       .v_min = 1,
+                       .v_max = 5,
+                       .val_min = 0,
+                       .val_max = 2500},
+                      {.channel_num = 7,
+                       .sensor_id = 3,
+                       .type = TELEM_PRESSURE,
+                       .v_min = 1,
+                       .v_max = 5,
+                       .val_min = 0,
+                       .val_max = 2500}}},
+        {.id = 2,
+         .fd = -1,
+         .devpath = "/dev/adc2", /* 0x4A */
+         .n_channels = 2,
+         .channels = {{.channel_num = 2,
+                       .sensor_id = 0,
+                       .type = TELEM_MASS,
+                       .v_min = -5,
+                       .v_max = +5,
+                       .val_min = 0, /* TODO FILL IN CORRECT VALUES */
+                       .val_max = 0},
+                      {.channel_num = 4, .type = TELEM_CONT, .v_min = 0, .v_max = 5, .val_min = 0}}}};
+
+    for (int i = 0; i < sizeof(adc_devices) / sizeof(adc_devices[0]); i++) {
+        adc_devices[i].fd = open(adc_devices[i].devpath, O_RDONLY);
+        if (adc_devices[i].fd < 0) {
+            fprintf(stderr, "Could not open ADC device %s: %s\n", adc_devices[i].devpath, strerror(errno));
+        }
+    }
+
+    for (;;) {
+        struct timespec time_t;
+        clock_gettime(CLOCK_MONOTONIC, &time_t);
+        uint32_t time_ms = time_t.tv_sec * 1000 + time_t.tv_nsec / 1000000;
+
+        for (int i = 0; i < sizeof(adc_devices) / sizeof(adc_devices[0]); i++) {
+
+            if (adc_devices[i].fd < 0) {
+                continue;
+            }
+
+            err = adc_trigger_conversion(&adc_devices[i]);
+            if (err < 0) {
+                fprintf(stderr, "Failed to trigger ADC conversion on id %d: %d\n", adc_devices[i].id, err);
+                continue;
+            }
+
+            err = adc_read_value(&adc_devices[i]);
+            if (err < 0) {
+                fprintf(stderr, "Failed to read ADC value from id %d: %d\n", adc_devices[i].id, err);
+                continue;
+            }
+
+            for (int j = 0; j < adc_devices[i].n_channels; j++) {
+                adc_channel_t channel = adc_devices[i].channels[j];
+
+                int32_t adc_val = adc_devices[i].sample[channel.channel_num].am_data;
+                /* For each channel of data we find the corresponding information */
+                int32_t sensor_val = 0;
+                err = adc_sensor_val_conversion(&channel, adc_val, &sensor_val);
+                if (err < 0) {
+                    fprintf(stderr, "ADC %d pin %d: failed to convert value\n", i, channel.channel_num - 4);
+                    continue;
+                }
+                fprintf(stderr, "ADC %d pin %d value %ld\n", i, channel.channel_num - 4, adc_val);
+
+                telemetry_publish_data(&telem, channel.type, channel.sensor_id, time_ms, (void *)&sensor_val);
+            }
+            printf("\n");
+        }
+
+        if (sensor_mass.available) {
+            err = sensor_mass_fetch(&sensor_mass);
+            if (err < 0) {
+                fprintf(stderr, "Error fetching mass data: %d\n", err);
+            } else {
+                /* I made the id of this one 3, check on this*/
+                telemetry_publish_data(&telem, TELEM_MASS, 3, time_ms, (void *)&sensor_mass.data.force);
+            }
+        }
+    }
+
+#endif
 
     /* Null telemetry file means nothing to do */
     if (args->data_file == NULL) {

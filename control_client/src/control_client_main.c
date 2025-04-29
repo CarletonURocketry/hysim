@@ -13,6 +13,8 @@
 
 #ifndef DESKTOP_BUILD
 #include <nuttx/ioexpander/gpio.h>
+#include <nuttx/usb/cdcacm.h>
+#include <sys/boardctl.h>
 #endif
 
 #include "../../packets/packet.h"
@@ -22,7 +24,7 @@
 #include "switch.h"
 
 #define INTERRUPT_SIGNAL SIGUSR1
-#define DEBOUNCE_US 5000
+#define DEBOUNCE_US 10000
 
 #define array_len(arr) (sizeof(arr) / sizeof(arr[0]))
 
@@ -112,6 +114,8 @@ static int debounce_read(int fd, unsigned int *final) {
     unsigned int prev_value;
     unsigned int value;
 
+    usleep(DEBOUNCE_US); /* Debounce */
+
     err = ioctl(fd, GPIOC_READ, (unsigned long)((uintptr_t)&prev_value));
     if (err) return err;
     value = !prev_value;
@@ -139,6 +143,62 @@ static int debounce_read(int fd, unsigned int *final) {
 }
 #endif
 
+#if !defined(CONFIG_SYSTEM_NSH) && defined(CONFIG_CDCACM_CONSOLE)
+/* Starts the NuttX USB serial interface.
+ */
+static int usb_init(void) {
+    struct boardioc_usbdev_ctrl_s ctrl;
+    FAR void *handle;
+    int ret;
+    int usb_fd;
+
+    /* Initialize architecture */
+
+    ret = boardctl(BOARDIOC_INIT, 0);
+    if (ret != 0) {
+        return ret;
+    }
+
+    /* Initialize the USB serial driver */
+
+    ctrl.usbdev = BOARDIOC_USBDEV_CDCACM;
+    ctrl.action = BOARDIOC_USBDEV_CONNECT;
+    ctrl.instance = 0;
+    ctrl.handle = &handle;
+
+    ret = boardctl(BOARDIOC_USBDEV_CONTROL, (uintptr_t)&ctrl);
+    if (ret < 0) {
+        return ret;
+    }
+
+    /* Redirect standard streams to USB console */
+
+    do {
+        usb_fd = open("/dev/ttyACM0", O_RDWR);
+
+        /* ENOTCONN means that the USB device is not yet connected, so sleep.
+         * Anything else is bad.
+         */
+
+        DEBUGASSERT(errno == ENOTCONN);
+        usleep(100);
+    } while (usb_fd < 0);
+
+    usb_fd = open("/dev/ttyACM0", O_RDWR);
+
+    dup2(usb_fd, 0); /* stdout */
+    dup2(usb_fd, 1); /* stdin */
+    dup2(usb_fd, 2); /* stderr */
+
+    if (usb_fd > 2) {
+        close(usb_fd);
+    }
+    sleep(1); /* Seems to help ensure first few prints get captured */
+
+    return ret;
+}
+#endif
+
 int main(int argc, char **argv) {
 
     char *ip = "127.0.0.1";
@@ -150,10 +210,17 @@ int main(int argc, char **argv) {
     struct sigevent notify;
     siginfo_t signal_info;
     sigset_t set;
-    unsigned int invalue;
+    unsigned int invalue = 2; /* Invalid start value */
     const char *gpio_dev;
     int fd;
     switch_t *signal_sw;
+#endif
+
+#if !defined(DESKTOP_BUILD) && !defined(CONFIG_SYSTEM_NSH) && defined(CONFIG_CDCACM_CONSOLE)
+    if (usb_init()) {
+        return EXIT_FAILURE;
+    }
+    printf("Starting controller...\n");
 #endif
 
     /* Parse command line options. */
@@ -316,8 +383,10 @@ int main(int argc, char **argv) {
                 continue;
             }
 
-            /* Call the correct switch callback */
-            err = switch_callback(signal_sw, &pad, invalue);
+            /* Call the correct switch callback. `invalue` is negated because the switches use a pull-up resistor. When
+             * open circuit (off), the switch is high. When closed circuit (on) the switch is pulled low. */
+
+            err = switch_callback(signal_sw, &pad, !invalue);
 #endif
 
             /* Print a helpful error message */
