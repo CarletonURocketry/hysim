@@ -72,12 +72,12 @@ static const char *ACTUATOR_IN[] = {
     [ID_XV7] = "/dev/gpio8",         [ID_XV8] = "/dev/gpio9",
     [ID_XV9] = "/dev/gpio10",        [ID_XV10] = "/dev/gpio11",
     [ID_XV11] = "/dev/gpio12",       [ID_XV12] = "/dev/gpio13",
-    [ID_IGNITER] = "/dev/gpio26",    [ID_QUICK_DISCONNECT] = "/dev/gpio28",
-    [ID_FIRE_VALVE] = "/dev/gpio27",
+    [ID_IGNITER] = "/dev/gpio28",    [ID_QUICK_DISCONNECT] = "/dev/gpio15",
+    [ID_FIRE_VALVE] = "/dev/gpio14",
 };
 
 static const char *ARM_IN[] = {
-    [ARMED_PAD] = NULL,          [ARMED_VALVES] = NULL, [ARMED_IGNITION] = NULL,
+    [ARMED_PAD] = NULL,          [ARMED_VALVES] = "/dev/gpio27", [ARMED_IGNITION] = "/dev/gpio26",
     [ARMED_DISCONNECTED] = NULL, [ARMED_LAUNCH] = NULL,
 };
 #endif
