@@ -22,7 +22,7 @@
 #include "switch.h"
 
 #define INTERRUPT_SIGNAL SIGUSR1
-#define DEBOUNCE_US 5000
+#define DEBOUNCE_US 10000
 
 #define array_len(arr) (sizeof(arr) / sizeof(arr[0]))
 
@@ -112,6 +112,8 @@ static int debounce_read(int fd, unsigned int *final) {
     unsigned int prev_value;
     unsigned int value;
 
+    usleep(DEBOUNCE_US); /* Debounce */
+
     err = ioctl(fd, GPIOC_READ, (unsigned long)((uintptr_t)&prev_value));
     if (err) return err;
     value = !prev_value;
@@ -150,7 +152,7 @@ int main(int argc, char **argv) {
     struct sigevent notify;
     siginfo_t signal_info;
     sigset_t set;
-    unsigned int invalue;
+    unsigned int invalue = 2; /* Invalid start value */
     const char *gpio_dev;
     int fd;
     switch_t *signal_sw;
@@ -316,8 +318,10 @@ int main(int argc, char **argv) {
                 continue;
             }
 
-            /* Call the correct switch callback */
-            err = switch_callback(signal_sw, &pad, invalue);
+            /* Call the correct switch callback. `invalue` is negated because the switches use a pull-up resistor. When
+             * open circuit (off), the switch is high. When closed circuit (on) the switch is pulled low. */
+
+            err = switch_callback(signal_sw, &pad, !invalue);
 #endif
 
             /* Print a helpful error message */
