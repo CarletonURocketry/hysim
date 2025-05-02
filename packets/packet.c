@@ -72,6 +72,11 @@ void packet_warn_init(warn_p *p, uint32_t time, warn_type_e type) {
     p->type = (uint8_t)type;
 }
 
+void packet_continuity_state_init(continuity_state_p *p, uint32_t time, continuity_state_e state) {
+    p->time = time;
+    p->state = (uint8_t)state;
+}
+
 const char *arm_state_str(arm_lvl_e state) { return ARMING_STR[state]; }
 
 const char *warning_str(warn_type_e warning) { return WARNING_STR[warning]; }
