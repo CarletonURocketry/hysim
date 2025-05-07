@@ -1,4 +1,5 @@
 #include <arpa/inet.h>
+#include <fcntl.h>
 #include <getopt.h>
 #include <netinet/in.h>
 #include <pthread.h>
@@ -25,6 +26,7 @@
 #include "netutils/netinit.h"
 #endif
 
+#define CONTROL_THREAD_PRIORITY 200
 #define TELEMETRY_PORT 50002
 #define CONTROL_PORT 50001
 #define MULTICAST_ADDR "239.100.110.210"
@@ -202,6 +204,13 @@ int main(int argc, char **argv) {
     err = pthread_create(&controller_thread, NULL, controller_run, &controller_args);
     if (err) {
         fprintf(stderr, "Could not start controller thread: %s\n", strerror(err));
+        exit(EXIT_FAILURE);
+    }
+
+    /* Give the controller thread a higher priority to guarantee it will run before the telemetry thread */
+    err = pthread_setschedprio(controller_thread, CONTROL_THREAD_PRIORITY);
+    if (err) {
+        fprintf(stderr, "Could not set controller thread priority: %s\n", strerror(err));
         exit(EXIT_FAILURE);
     }
 
