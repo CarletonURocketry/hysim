@@ -85,12 +85,6 @@ static void telemetry_cancel_padstate_thread(void *arg) {
 }
 
 /*
- * Cleanup function to kill a thread.
- * @param arg A pointer to the pthread_t thread handle.
- */
-static void cancel_wrapper(void *arg) { pthread_cancel(*(pthread_t *)(arg)); }
-
-/*
  * A function to publish pressure, temperature, mass data.
  * @param sock The telemetry socket on which to publish.
  * @param type The telemetry type is being published.
