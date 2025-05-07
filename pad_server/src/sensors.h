@@ -20,10 +20,6 @@ typedef struct {
     int channel_num;
     int sensor_id;
     telem_subtype_e type;
-    int v_min;
-    int v_max;
-    int val_max;
-    int val_min;
 } adc_channel_t;
 
 typedef struct {

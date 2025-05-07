@@ -1,4 +1,5 @@
 #include "sensors.h"
+#include <math.h>
 
 #ifdef CONFIG_ADC_ADS1115
 /*
@@ -103,16 +104,43 @@ int adc_sensor_val_conversion(adc_channel_t *channel, int32_t adc_val, int32_t *
     /* 6.144 is the FSR of the ADC at PGA value 0 */
     double sensor_voltage = ((double)adc_val * 6.144) / (32768.0);
 
-    if (sensor_voltage < channel->v_min || sensor_voltage > channel->v_max) {
-        return -1;
-    }
+    if (channel->type == TELEM_PRESSURE) {
+        double v_min = 1.0;
+        double v_max = 5.0;
+        double val_min = 0;
+        double val_max;
 
-    if (channel->type == TELEM_PRESSURE || channel->type == TELEM_MASS) {
-        double slope = (double)(channel->v_max - channel->v_min) / (double)(channel->val_max - channel->val_min);
+        if (channel->sensor_id == 4 || channel->sensor_id == 5) {
+            val_max = 1000;
+        } else {
+            val_max = 2500;
+        }
+
+        if (sensor_voltage < v_min || sensor_voltage > v_max) {
+            return -1;
+        }
+
+        double slope = (double)(v_max - v_min) / (double)(val_max - val_min);
         if (slope == 0) {
             return -1;
         }
-        double y_intercept = channel->v_min - slope * channel->val_min;
+        double y_intercept = v_min - slope * val_min;
+        *output_val = (sensor_voltage - y_intercept) / slope;
+
+    } else if (channel->type == TELEM_MASS) {
+        /* This was what was in the old code but honestly it looks sus */
+        // (double)(500 / 2.2) / (double)(1024);
+
+        double v_min = -5.0;
+        double v_max = 5.0;
+        double val_min = 0;    /* TODO FILL IN CORRECT VALUES */
+        double val_max = 1000; /* TODO FILL IN CORRECT VALUES */
+
+        double slope = (double)(v_max - v_min) / (double)(val_max - val_min);
+        if (slope == 0) {
+            return -1;
+        }
+        double y_intercept = v_min - slope * val_min;
         *output_val = (sensor_voltage - y_intercept) / slope;
 
     } else if (channel->type == TELEM_CONT) {
@@ -122,7 +150,34 @@ int adc_sensor_val_conversion(adc_channel_t *channel, int32_t adc_val, int32_t *
             *output_val = 1;
         }
     } else if (channel->type == TELEM_TEMP) {
-        *output_val = sensor_voltage;
+        /* If you're wondering what is this I don't know either, it was pulled from the old code */
+
+        double A, B, C;
+        double R, T;
+
+        /* Set coefficients based on sensor_id */
+        if (channel->sensor_id == 0) { /* Thermistor 1 */
+            A = 1.403 * 0.001;
+            B = 2.373 * 0.0001;
+            C = 9.827 * 0.00000001;
+        } else { /* Thermistor 2 */
+            A = 1.468 * 0.001;
+            B = 2.383 * 0.0001;
+            C = 1.007 * 0.0000001;
+        }
+
+        if (sensor_voltage > 0) {
+            R = 2948.0 / ((4.945 / sensor_voltage) - 1.0);
+
+            if (R > 0) {
+                T = 1.0 / (A + B * log(R) + C * pow(log(R), 3));
+                *output_val = (int32_t)((T - 273.15) * 100);
+            } else {
+                *output_val = 0;
+            }
+        } else {
+            *output_val = 0;
+        }
     } else {
         return -1;
     }
