@@ -3,10 +3,10 @@
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
-#include <stdio.h>
 
 #include "pad.h"
 #define RCVTIMEO_SEC 3;

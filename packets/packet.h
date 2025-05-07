@@ -36,6 +36,7 @@ typedef enum {
     TELEM_ARM = 3,      /* Arming state */
     TELEM_ACT = 4,      /* Actuator state */
     TELEM_WARN = 5,     /* Warning message */
+    TELEM_CONT = 6,     /* Continuity measurement */
 } telem_subtype_e;
 
 /* CONTROL MESSAGES */
