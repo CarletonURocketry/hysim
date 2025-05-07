@@ -6,6 +6,7 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <stdio.h>
 
 #include "pad.h"
 #define RCVTIMEO_SEC 3;
@@ -71,7 +72,10 @@ int pad_connect_forever(pad_t *pad) {
     int status = 0;
     do {
         status = pad_connect(pad);
-    } while (status == ECONNREFUSED);
+        if (status != 0) {
+            fprintf(stderr, "Connect failed (error %d), trying again.\n", status);
+        }
+    } while (status == ECONNREFUSED || status == ETIMEDOUT || status == ENOTCONN || status == ENETUNREACH);
 
     return status;
 }

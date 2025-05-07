@@ -15,6 +15,11 @@
 #include <nuttx/ioexpander/gpio.h>
 #include <nuttx/usb/cdcacm.h>
 #include <sys/boardctl.h>
+
+#if defined(CONFIG_NSH_NETINIT) && !defined(CONFIG_SYSTEM_NSH)
+#include "netutils/netinit.h"
+#endif
+
 #endif
 
 #include "../../packets/packet.h"
@@ -221,6 +226,10 @@ int main(int argc, char **argv) {
         return EXIT_FAILURE;
     }
     printf("Starting controller...\n");
+#endif
+
+#if defined(CONFIG_NSH_NETINIT) && !defined(CONFIG_SYSTEM_NSH)
+    netinit_bringup();
 #endif
 
     /* Parse command line options. */
