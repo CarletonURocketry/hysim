@@ -72,7 +72,9 @@ int pad_connect_forever(pad_t *pad) {
     int status = 0;
     do {
         status = pad_connect(pad);
-        fprintf(stderr, "Connect failed (error %d), trying again.\n");
+        if (status != 0) {
+            fprintf(stderr, "Connect failed (error %d), trying again.\n", status);
+        }
     } while (status == ECONNREFUSED || status == ETIMEDOUT || status == ENOTCONN || status == ENETUNREACH);
 
     return status;
