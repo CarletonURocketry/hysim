@@ -249,6 +249,7 @@ void *telemetry_run(void *arg) {
         }
     }
 
+    /* Channel numbers go from 0 to 8, 0-7 are differential between the pins, 4-7 are single ended */
     adc_device_t adc_devices[] = {{.id = 0,
                                    .fd = -1,
                                    .devpath = "/dev/adc0", /* 0x48 */
@@ -269,8 +270,8 @@ void *telemetry_run(void *arg) {
                                    .fd = -1,
                                    .devpath = "/dev/adc2", /* 0x4A */
                                    .n_channels = 2,
-                                   .channels = {{.channel_num = 2, .sensor_id = 0, .type = TELEM_MASS},
-                                                {.channel_num = 4, .sensor_id = 1, .type = TELEM_CONT}}}};
+                                   .channels = {{.channel_num = 4, .sensor_id = 0, .type = TELEM_MASS},
+                                                {.channel_num = 6, .sensor_id = 1, .type = TELEM_CONT}}}};
 
     for (int i = 0; i < sizeof(adc_devices) / sizeof(adc_devices[0]); i++) {
         adc_devices[i].fd = open(adc_devices[i].devpath, O_RDONLY);
