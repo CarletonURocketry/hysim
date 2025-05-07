@@ -16,6 +16,15 @@
 #include "state.h"
 #include "telemetry.h"
 
+#ifndef DESKTOP_BUILD
+#include <nuttx/usb/cdcacm.h>
+#include <sys/boardctl.h>
+#endif
+
+#if defined(CONFIG_NSH_NETINIT) && !defined(CONFIG_SYSTEM_NSH)
+#include "netutils/netinit.h"
+#endif
+
 #define TELEMETRY_PORT 50002
 #define CONTROL_PORT 50001
 #define MULTICAST_ADDR "239.100.110.210"
@@ -55,6 +64,62 @@ void int_handler(int sig) {
     exit(EXIT_SUCCESS);
 }
 
+#if !defined(CONFIG_SYSTEM_NSH) && defined(CONFIG_CDCACM_CONSOLE)
+/* Starts the NuttX USB serial interface.
+ */
+static int usb_init(void) {
+    struct boardioc_usbdev_ctrl_s ctrl;
+    FAR void *handle;
+    int ret;
+    int usb_fd;
+
+    /* Initialize architecture */
+
+    ret = boardctl(BOARDIOC_INIT, 0);
+    if (ret != 0) {
+        return ret;
+    }
+
+    /* Initialize the USB serial driver */
+
+    ctrl.usbdev = BOARDIOC_USBDEV_CDCACM;
+    ctrl.action = BOARDIOC_USBDEV_CONNECT;
+    ctrl.instance = 0;
+    ctrl.handle = &handle;
+
+    ret = boardctl(BOARDIOC_USBDEV_CONTROL, (uintptr_t)&ctrl);
+    if (ret < 0) {
+        return ret;
+    }
+
+    /* Redirect standard streams to USB console */
+
+    do {
+        usb_fd = open("/dev/ttyACM0", O_RDWR);
+
+        /* ENOTCONN means that the USB device is not yet connected, so sleep.
+         * Anything else is bad.
+         */
+
+        DEBUGASSERT(errno == ENOTCONN);
+        usleep(100);
+    } while (usb_fd < 0);
+
+    usb_fd = open("/dev/ttyACM0", O_RDWR);
+
+    dup2(usb_fd, 0); /* stdout */
+    dup2(usb_fd, 1); /* stdin */
+    dup2(usb_fd, 2); /* stderr */
+
+    if (usb_fd > 2) {
+        close(usb_fd);
+    }
+    sleep(1); /* Seems to help ensure first few prints get captured */
+
+    return ret;
+}
+#endif
+
 /*
  * The pad server has two tasks:
  * - Handle requests from a single control input client to change arming states or actuate actuators
@@ -77,6 +142,17 @@ void int_handler(int sig) {
  */
 
 int main(int argc, char **argv) {
+
+#if !defined(DESKTOP_BUILD) && !defined(CONFIG_SYSTEM_NSH) && defined(CONFIG_CDCACM_CONSOLE)
+    if (usb_init()) {
+        return EXIT_FAILURE;
+    }
+    printf("Starting controller...\n");
+#endif
+
+#if defined(CONFIG_NSH_NETINIT) && !defined(CONFIG_SYSTEM_NSH)
+    netinit_bringup();
+#endif
 
     /* Parse command line options. */
 
