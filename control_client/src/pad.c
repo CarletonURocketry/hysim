@@ -71,7 +71,7 @@ int pad_connect_forever(pad_t *pad) {
     int status = 0;
     do {
         status = pad_connect(pad);
-    } while (status == ECONNREFUSED);
+    } while (status == ECONNREFUSED || status == ETIMEDOUT);
 
     return status;
 }
