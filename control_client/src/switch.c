@@ -85,6 +85,7 @@ int switch_callback(switch_t *sw, pad_t *pad, bool newstate) {
     /* Handle body depending on switch */
 
     switch (sw->kind) {
+
     case CNTRL_ACT_REQ: {
         act_req_p act_req = {.id = sw->act_id, .state = sw->state};
         iov[1].iov_base = &act_req;
@@ -92,13 +93,19 @@ int switch_callback(switch_t *sw, pad_t *pad, bool newstate) {
         pad_send(pad, iov, iovlen); // TODO: handle err
         return check_act_response(pad);
     } break;
+
     case CNTRL_ARM_REQ: {
-        arm_req_p arm_req = {.level = sw->act_id};
+
+        /* If the switch was turned ON, send a request for its arming level. If it was turned OFF, go back a level.
+         */
+        arm_req_p arm_req = {.level = newstate ? sw->act_id : sw->act_id - 1};
+
         iov[1].iov_base = &arm_req;
         iov[1].iov_len = sizeof(arm_req);
         pad_send(pad, iov, iovlen); // TODO: handle err
         return check_arm_response(pad);
     } break;
+
     default:
         /* Invalid type of switch */
         return -EINVAL;
