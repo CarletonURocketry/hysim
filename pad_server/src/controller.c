@@ -228,10 +228,13 @@ void *controller_run(void *arg) {
             }
 
             switch ((packet_type_e)hdr.type) {
+
             case TYPE_CNTRL:
 
                 switch ((cntrl_subtype_e)hdr.subtype) {
+
                 case CNTRL_ACT_ACK:
+                    /* Deliberate fall-through */
                 case CNTRL_ARM_ACK:
                     fprintf(stderr, "Unexpectedly received acknowledgement from sender.\n");
                     break;
@@ -271,6 +274,7 @@ void *controller_run(void *arg) {
                     }
 
                 } break;
+
                 case CNTRL_ARM_REQ: {
                     arm_req_p req;
                     controller_recv(&controller, &req, sizeof(req)); // TODO: handle recv errors
@@ -303,12 +307,17 @@ void *controller_run(void *arg) {
                 } break;
 
                 default:
-                    fprintf(stderr, "Invalid message type: %u\n", hdr.type);
+                    fprintf(stderr, "Invalid control message type: %u\n", hdr.subtype);
                     break;
                 }
+                break;
 
             case TYPE_TELEM:
                 fprintf(stderr, "Unexpectedly received telemetry packet.\n");
+                break;
+
+            default:
+                fprintf(stderr, "Invalid message type: %u\n", hdr.type);
                 break;
             }
         }
