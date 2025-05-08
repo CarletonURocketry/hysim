@@ -28,7 +28,7 @@ include $(APPDIR)/Application.mk
 else
 
 CC = gcc
-CFLAGS = -Wall -Wextra -pthread
+CFLAGS = -Wall -Wextra -pthread -DDESKTOP_BUILD
 OUT = pad
 
 SRCDIR = $(abspath ./src)

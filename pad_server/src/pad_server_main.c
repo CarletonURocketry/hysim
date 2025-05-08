@@ -1,4 +1,5 @@
 #include <arpa/inet.h>
+#include <fcntl.h>
 #include <getopt.h>
 #include <netinet/in.h>
 #include <pthread.h>
@@ -15,6 +16,18 @@
 #include "helptext/helptext.h"
 #include "state.h"
 #include "telemetry.h"
+
+#ifndef DESKTOP_BUILD
+#include <nuttx/usb/cdcacm.h>
+#include <sys/boardctl.h>
+#endif
+
+#if defined(CONFIG_NSH_NETINIT) && !defined(CONFIG_SYSTEM_NSH)
+#include "netutils/netinit.h"
+#endif
+
+#define CONTROL_THREAD_PRIORITY 200
+#define TELEM_THREAD_PRIORITY 100
 
 #define TELEMETRY_PORT 50002
 #define CONTROL_PORT 50001
@@ -55,6 +68,62 @@ void int_handler(int sig) {
     exit(EXIT_SUCCESS);
 }
 
+#if !defined(CONFIG_SYSTEM_NSH) && defined(CONFIG_CDCACM_CONSOLE)
+/* Starts the NuttX USB serial interface.
+ */
+static int usb_init(void) {
+    struct boardioc_usbdev_ctrl_s ctrl;
+    FAR void *handle;
+    int ret;
+    int usb_fd;
+
+    /* Initialize architecture */
+
+    ret = boardctl(BOARDIOC_INIT, 0);
+    if (ret != 0) {
+        return ret;
+    }
+
+    /* Initialize the USB serial driver */
+
+    ctrl.usbdev = BOARDIOC_USBDEV_CDCACM;
+    ctrl.action = BOARDIOC_USBDEV_CONNECT;
+    ctrl.instance = 0;
+    ctrl.handle = &handle;
+
+    ret = boardctl(BOARDIOC_USBDEV_CONTROL, (uintptr_t)&ctrl);
+    if (ret < 0) {
+        return ret;
+    }
+
+    /* Redirect standard streams to USB console */
+
+    do {
+        usb_fd = open("/dev/ttyACM0", O_RDWR);
+
+        /* ENOTCONN means that the USB device is not yet connected, so sleep.
+         * Anything else is bad.
+         */
+
+        DEBUGASSERT(errno == ENOTCONN);
+        usleep(100);
+    } while (usb_fd < 0);
+
+    usb_fd = open("/dev/ttyACM0", O_RDWR);
+
+    dup2(usb_fd, 0); /* stdout */
+    dup2(usb_fd, 1); /* stdin */
+    dup2(usb_fd, 2); /* stderr */
+
+    if (usb_fd > 2) {
+        close(usb_fd);
+    }
+    sleep(1); /* Seems to help ensure first few prints get captured */
+
+    return ret;
+}
+#endif
+
 /*
  * The pad server has two tasks:
  * - Handle requests from a single control input client to change arming states or actuate actuators
@@ -77,6 +146,18 @@ void int_handler(int sig) {
  */
 
 int main(int argc, char **argv) {
+
+#if !defined(DESKTOP_BUILD) && !defined(CONFIG_SYSTEM_NSH) && defined(CONFIG_CDCACM_CONSOLE)
+    if (usb_init()) {
+        return EXIT_FAILURE;
+    }
+    printf("Starting controller...\n");
+#endif
+
+#if defined(CONFIG_NSH_NETINIT) && !defined(CONFIG_SYSTEM_NSH)
+    netinit_bringup();
+    sleep(2);
+#endif
 
     /* Parse command line options. */
 
@@ -129,12 +210,30 @@ int main(int argc, char **argv) {
         exit(EXIT_FAILURE);
     }
 
+#ifndef __APPLE__
+    /* Give the controller thread a higher priority to guarantee it will run before the telemetry thread */
+    err = pthread_setschedprio(controller_thread, CONTROL_THREAD_PRIORITY);
+    if (err) {
+        fprintf(stderr, "Could not set controller thread priority: %s\n", strerror(err));
+        exit(EXIT_FAILURE);
+    }
+#endif
+
     /* Start telemetry thread */
     err = pthread_create(&telem_thread, NULL, telemetry_run, &telemetry_args);
     if (err) {
         fprintf(stderr, "Could not start telemetry thread: %s\n", strerror(err));
         exit(EXIT_FAILURE);
     }
+
+#ifndef __APPLE__
+    /* Give the telemetry thread a lower priority */
+    err = pthread_setschedprio(telem_thread, TELEM_THREAD_PRIORITY);
+    if (err) {
+        fprintf(stderr, "Could not set controller thread priority: %s\n", strerror(err));
+        exit(EXIT_FAILURE);
+    }
+#endif
 
     /* Attach signal handler */
     signal(SIGINT, int_handler);

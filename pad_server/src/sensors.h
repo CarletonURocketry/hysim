@@ -37,7 +37,7 @@ int adc_sensor_val_conversion(adc_channel_t *channel, int32_t adc_val, int32_t *
 
 #endif
 
-#if CONFIG_SENSORS_NAU7802
+#ifdef CONFIG_SENSORS_NAU7802
 #include <uORB/uORB.h>
 
 #define SENSOR_MASS_KNOWN_WEIGHT 1000
