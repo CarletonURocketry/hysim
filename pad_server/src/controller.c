@@ -8,7 +8,6 @@
 #include <unistd.h>
 
 #include "../../packets/packet.h"
-#include "arm.h"
 #include "controller.h"
 #include "state.h"
 
@@ -163,8 +162,8 @@ static ssize_t controller_send(controller_t *controller, void *buf, size_t n) {
     return send(controller->client, buf, n, 0);
 }
 
-/* Run the controller logic
- * TODO: docs
+/* The controller logic thread
+ * @param arg Argument containing `controller_args_t`
  */
 void *controller_run(void *arg) {
     controller_args_t *args = (controller_args_t *)(arg);
@@ -195,7 +194,9 @@ void *controller_run(void *arg) {
         printf("Controller connected!\n");
 
         /* Receive messages */
+
         for (;;) {
+
             /* Get the message header to determine what to handle */
             header_p hdr;
             ssize_t bread = 0;
@@ -219,17 +220,21 @@ void *controller_run(void *arg) {
                 total_read += bread;
             }
 
-            // Error happened, do a cleanup and re-initialize connection
+            /* Error happened, do a cleanup and re-initialize connection */
+
             if (bread <= 0) {
                 controller_client_disconnect(&controller);
                 break;
             }
 
             switch ((packet_type_e)hdr.type) {
+
             case TYPE_CNTRL:
 
                 switch ((cntrl_subtype_e)hdr.subtype) {
+
                 case CNTRL_ACT_ACK:
+                    /* Deliberate fall-through */
                 case CNTRL_ARM_ACK:
                     fprintf(stderr, "Unexpectedly received acknowledgement from sender.\n");
                     break;
@@ -269,18 +274,16 @@ void *controller_run(void *arg) {
                     }
 
                 } break;
+
                 case CNTRL_ARM_REQ: {
                     arm_req_p req;
                     controller_recv(&controller, &req, sizeof(req)); // TODO: handle recv errors
                     printf("Received arming state %u.\n", req.level);
 
-                    err = change_arm_level(args->state, req.level);
+                    err = padstate_change_level(args->state, req.level);
                     arm_ack_p ack;
 
                     switch (err) {
-                    case -1:
-                        fprintf(stderr, "Could not change arming level with error: %s\n", strerror(errno));
-                        break;
                     case ARM_OK:
                         fprintf(stderr, "Arming level changed succesfully to %d\n", req.level);
                         ack.status = ARM_OK;
@@ -301,9 +304,18 @@ void *controller_run(void *arg) {
                 } break;
 
                 default:
-                    fprintf(stderr, "Invalid message type: %u\n", hdr.type);
+                    fprintf(stderr, "Invalid control message type: %u\n", hdr.subtype);
                     break;
                 }
+                break;
+
+            case TYPE_TELEM:
+                fprintf(stderr, "Unexpectedly received telemetry packet.\n");
+                break;
+
+            default:
+                fprintf(stderr, "Invalid message type: %u\n", hdr.type);
+                break;
             }
         }
     }
