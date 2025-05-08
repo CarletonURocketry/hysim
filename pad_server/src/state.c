@@ -149,14 +149,26 @@ int padstate_get_actstate(padstate_t *state, uint8_t act_id, bool *act_state) {
  * set
  */
 int pad_actuate(padstate_t *state, uint8_t id, uint8_t req_state) {
+    bool current_state;
+    bool is_solenoid_valve;
+    arm_lvl_e arm_lvl;
+    int err;
+
+    /* Invalid actuator ID */
+
     if (id >= NUM_ACTUATORS) return ACT_DNE;
 
+    is_solenoid_valve = id >= ID_XV1 && id <= ID_XV12;
+
+    /* Invalid state requested */
+
     if (req_state != 0 && req_state != 1) return ACT_INV;
-    bool new_state = (bool)req_state;
 
-    arm_lvl_e arm_lvl = padstate_get_level(state);
+    /* Get the current arming level */
 
-    bool is_solenoid_valve = id >= ID_XV1 && id <= ID_XV12;
+    arm_lvl = padstate_get_level(state);
+
+    /* Check if the current arming level permits for the actuator to be commanded */
 
     switch (arm_lvl) {
     case ARMED_PAD:
@@ -186,24 +198,14 @@ int pad_actuate(padstate_t *state, uint8_t id, uint8_t req_state) {
         break;
     }
 
-    bool current_state;
-    int err = padstate_get_actstate(state, id, &current_state);
+    /* For now just always actuate the actuator */
+
+    err = actuator_set(&state->actuators[id], req_state);
     if (err) {
         errno = err;
         return -1;
     }
 
-    if (new_state != current_state) {
-        err = actuator_set(&state->actuators[id], new_state);
-        if (err) {
-            return -1;
-        }
-    }
-
-    pthread_mutex_lock(&state->update_mut);
-    state->update_recorded = true;
-    pthread_cond_signal(&state->update_cond);
-    pthread_mutex_unlock(&state->update_mut);
-
+    padstate_signal_update(state);
     return ACT_OK;
 }
