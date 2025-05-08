@@ -210,12 +210,14 @@ int main(int argc, char **argv) {
         exit(EXIT_FAILURE);
     }
 
+#ifndef __APPLE__
     /* Give the controller thread a higher priority to guarantee it will run before the telemetry thread */
     err = pthread_setschedprio(controller_thread, CONTROL_THREAD_PRIORITY);
     if (err) {
         fprintf(stderr, "Could not set controller thread priority: %s\n", strerror(err));
         exit(EXIT_FAILURE);
     }
+#endif
 
     /* Start telemetry thread */
     err = pthread_create(&telem_thread, NULL, telemetry_run, &telemetry_args);
@@ -224,12 +226,14 @@ int main(int argc, char **argv) {
         exit(EXIT_FAILURE);
     }
 
+#ifndef __APPLE__
     /* Give the telemetry thread a lower priority */
     err = pthread_setschedprio(telem_thread, TELEM_THREAD_PRIORITY);
     if (err) {
         fprintf(stderr, "Could not set controller thread priority: %s\n", strerror(err));
         exit(EXIT_FAILURE);
     }
+#endif
 
     /* Attach signal handler */
     signal(SIGINT, int_handler);
