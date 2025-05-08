@@ -6,7 +6,6 @@
 #include "../../packets/packet.h"
 #include <pthread.h>
 #include <semaphore.h>
-#include <stdatomic.h>
 #include <stdbool.h>
 
 /* Number of actuators in the system: 12 solenoid valves, 1 fire valve, 1 quick disconnect, 1 igniter */
@@ -15,7 +14,7 @@
 /* State of the entire pad control system */
 typedef struct {
     actuator_t actuators[NUM_ACTUATORS];
-    _Atomic(arm_lvl_e) arm_level;
+    arm_lvl_e arm_level;
     pthread_rwlock_t rw_lock;
     pthread_mutex_t update_mut;
     pthread_cond_t update_cond;
@@ -24,8 +23,9 @@ typedef struct {
 
 void padstate_init(padstate_t *state);
 arm_lvl_e padstate_get_level(padstate_t *state);
-int padstate_change_level(padstate_t *state, arm_lvl_e *old_arm, arm_lvl_e new_arm);
 int padstate_get_actstate(padstate_t *state, uint8_t act_id, bool *act_val);
+int padstate_signal_update(padstate_t *state);
+int padstate_change_level(padstate_t *state, arm_lvl_e new_arm);
 int pad_actuate(padstate_t *state, uint8_t id, uint8_t req_state);
 
 const char *actuator_name(uint8_t id);
