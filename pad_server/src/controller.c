@@ -162,8 +162,8 @@ static ssize_t controller_send(controller_t *controller, void *buf, size_t n) {
     return send(controller->client, buf, n, 0);
 }
 
-/* Run the controller logic
- * TODO: docs
+/* The controller logic thread
+ * @param arg Argument containing `controller_args_t`
  */
 void *controller_run(void *arg) {
     controller_args_t *args = (controller_args_t *)(arg);
@@ -194,7 +194,9 @@ void *controller_run(void *arg) {
         printf("Controller connected!\n");
 
         /* Receive messages */
+
         for (;;) {
+
             /* Get the message header to determine what to handle */
             header_p hdr;
             ssize_t bread = 0;
@@ -218,7 +220,8 @@ void *controller_run(void *arg) {
                 total_read += bread;
             }
 
-            // Error happened, do a cleanup and re-initialize connection
+            /* Error happened, do a cleanup and re-initialize connection */
+
             if (bread <= 0) {
                 controller_client_disconnect(&controller);
                 break;
@@ -303,6 +306,10 @@ void *controller_run(void *arg) {
                     fprintf(stderr, "Invalid message type: %u\n", hdr.type);
                     break;
                 }
+
+            case TYPE_TELEM:
+                fprintf(stderr, "Unexpectedly received telemetry packet.\n");
+                break;
             }
         }
     }

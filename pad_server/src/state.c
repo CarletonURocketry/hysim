@@ -205,6 +205,38 @@ int pad_actuate(padstate_t *state, uint8_t id, uint8_t req_state) {
         return -1;
     }
 
+    /* Now we made it past the permission being denied *and* the actuator was successfully actuated.
+     * Check if this actuator is a special actuator that increases the arming level */
+
+    if (id == ID_QUICK_DISCONNECT) {
+
+        /* If we disconnected and we're in a state less than ARMED_DISCONNECTED, advance the state */
+
+        if (req_state && padstate_get_level(state) < ARMED_DISCONNECTED) {
+            padstate_change_level(state, ARMED_DISCONNECTED);
+        }
+
+        /* If we re-connected, move back a level prior */
+
+        if (!req_state) {
+            padstate_change_level(state, ARMED_IGNITION);
+        }
+
+    } else if (id == ID_IGNITER) {
+
+        /* If we ignited and we're in a state less than ARMED_LAUNCH, advance the state */
+
+        if (req_state && padstate_get_level(state) < ARMED_LAUNCH) {
+            padstate_change_level(state, ARMED_LAUNCH);
+        }
+
+        /* If we un-ignited, move back a level prior */
+
+        if (!req_state) {
+            padstate_change_level(state, ARMED_DISCONNECTED);
+        }
+    }
+
     padstate_signal_update(state);
     return ACT_OK;
 }
