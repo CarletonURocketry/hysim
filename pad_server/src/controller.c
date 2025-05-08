@@ -284,9 +284,6 @@ void *controller_run(void *arg) {
                     arm_ack_p ack;
 
                     switch (err) {
-                    case -1:
-                        fprintf(stderr, "Could not change arming level with error: %s\n", strerror(errno));
-                        break;
                     case ARM_OK:
                         fprintf(stderr, "Arming level changed succesfully to %d\n", req.level);
                         ack.status = ARM_OK;

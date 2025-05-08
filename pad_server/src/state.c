@@ -114,6 +114,7 @@ int padstate_change_level(padstate_t *state, arm_lvl_e new_arm) {
     if (lvl_increase || lvl_decrease_from_armed_valves || lvl_decrease_from_firing_sequence) {
         state->arm_level = new_arm;
     } else {
+        pthread_rwlock_unlock(&state->rw_lock);
         return ARM_DENIED;
     }
 

@@ -210,7 +210,7 @@ int main(int argc, char **argv) {
         exit(EXIT_FAILURE);
     }
 
-#ifndef __APPLE__
+#ifndef DESKTOP_BUILD
     /* Give the controller thread a higher priority to guarantee it will run before the telemetry thread */
     err = pthread_setschedprio(controller_thread, CONTROL_THREAD_PRIORITY);
     if (err) {
@@ -226,7 +226,7 @@ int main(int argc, char **argv) {
         exit(EXIT_FAILURE);
     }
 
-#ifndef __APPLE__
+#ifndef DESKTOP_BUILD
     /* Give the telemetry thread a lower priority */
     err = pthread_setschedprio(telem_thread, TELEM_THREAD_PRIORITY);
     if (err) {
