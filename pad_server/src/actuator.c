@@ -31,7 +31,7 @@ static const char *ACTUATOR_STR[] = {
  */
 void actuator_init(actuator_t *act, uint8_t id, actuate_f on, actuate_f off, void *priv) {
     act->id = id;
-    act->state = ATOMIC_VAR_INIT(false);
+    act->state = false;
     act->on = on;
     act->off = off;
     act->priv = priv;

@@ -149,7 +149,6 @@ int padstate_get_actstate(padstate_t *state, uint8_t act_id, bool *act_state) {
  * set
  */
 int pad_actuate(padstate_t *state, uint8_t id, uint8_t req_state) {
-    bool current_state;
     bool is_solenoid_valve;
     arm_lvl_e arm_lvl;
     int err;
