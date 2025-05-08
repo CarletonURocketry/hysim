@@ -27,6 +27,8 @@
 #endif
 
 #define CONTROL_THREAD_PRIORITY 200
+#define TELEM_THREAD_PRIORITY 100
+
 #define TELEMETRY_PORT 50002
 #define CONTROL_PORT 50001
 #define MULTICAST_ADDR "239.100.110.210"
@@ -154,6 +156,7 @@ int main(int argc, char **argv) {
 
 #if defined(CONFIG_NSH_NETINIT) && !defined(CONFIG_SYSTEM_NSH)
     netinit_bringup();
+    sleep(2);
 #endif
 
     /* Parse command line options. */
@@ -218,6 +221,13 @@ int main(int argc, char **argv) {
     err = pthread_create(&telem_thread, NULL, telemetry_run, &telemetry_args);
     if (err) {
         fprintf(stderr, "Could not start telemetry thread: %s\n", strerror(err));
+        exit(EXIT_FAILURE);
+    }
+
+    /* Give the telemetry thread a lower priority */
+    err = pthread_setschedprio(telem_thread, TELEM_THREAD_PRIORITY);
+    if (err) {
+        fprintf(stderr, "Could not set controller thread priority: %s\n", strerror(err));
         exit(EXIT_FAILURE);
     }
 
