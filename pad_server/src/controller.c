@@ -8,7 +8,6 @@
 #include <unistd.h>
 
 #include "../../packets/packet.h"
-#include "arm.h"
 #include "controller.h"
 #include "state.h"
 
@@ -274,7 +273,7 @@ void *controller_run(void *arg) {
                     controller_recv(&controller, &req, sizeof(req)); // TODO: handle recv errors
                     printf("Received arming state %u.\n", req.level);
 
-                    err = change_arm_level(args->state, req.level);
+                    err = padstate_change_level(args->state, req.level);
                     arm_ack_p ack;
 
                     switch (err) {
