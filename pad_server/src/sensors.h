@@ -59,4 +59,18 @@ int sensor_mass_fetch(sensor_mass_t *sensor_mass);
 
 #endif
 
+#ifdef CONFIG_SENSORS_MCP9600
+typedef struct {
+    char *dev;
+    const struct orb_metadata *imu_meta;
+    int imu;
+    struct sensor_temp data;
+    bool available;
+} sensor_temp_t;
+
+int sensor_temp_init(sensor_temp_t *sensor_temp, char *dev);
+int sensor_temp_fetch(sensor_temp_t *sensor_temp);
+
+#endif
+
 #endif /* __SENSORS_H */
