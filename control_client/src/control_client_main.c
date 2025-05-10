@@ -15,6 +15,7 @@
 #include <nuttx/ioexpander/gpio.h>
 #include <nuttx/usb/cdcacm.h>
 #include <sys/boardctl.h>
+#include <debug.h>
 
 #if defined(CONFIG_NSH_NETINIT) && !defined(CONFIG_SYSTEM_NSH)
 #include "netutils/netinit.h"
@@ -221,6 +222,10 @@ int main(int argc, char **argv) {
     switch_t *signal_sw;
 #endif
 
+#if !defined(DESKTOP_BUILD) && !defined(CONFIG_SYSTEM_NSH)
+    boardctl(BOARDIOC_INIT, 0);
+#endif
+
 #if !defined(DESKTOP_BUILD) && !defined(CONFIG_SYSTEM_NSH) && defined(CONFIG_CDCACM_CONSOLE)
     if (usb_init()) {
         return EXIT_FAILURE;
@@ -286,6 +291,7 @@ int main(int argc, char **argv) {
 
         fd = open(gpio_dev, O_RDWR);
         if (fd < 0) {
+            syslog(LOG_ERR, "Couldn't open '%s': %d\n", gpio_dev, errno);
             fprintf(stderr, "Couldn't open '%s': %d\n", gpio_dev, errno);
             return EXIT_FAILURE;
         }
@@ -293,13 +299,16 @@ int main(int argc, char **argv) {
         /* Set up to receive signal */
 
         notify.sigev_value.sival_ptr = &switches[i];
+        syslog(LOG_INFO, "ioctl register call");
         err = ioctl(fd, GPIOC_REGISTER, (unsigned long)&notify);
         if (err < 0) {
+            syslog(LOG_ERR, "Failed to register interrupt for %s: %d\n", gpio_dev, errno);
             fprintf(stderr, "Failed to register interrupt for %s: %d\n", gpio_dev, errno);
             close(fd);
             return EXIT_FAILURE;
         }
 
+        syslog(LOG_INFO, "Closed device");
         close(fd);
     }
 #endif
