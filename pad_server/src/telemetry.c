@@ -224,26 +224,45 @@ void *telemetry_run(void *arg) {
     }
     pthread_cleanup_push(telemetry_cancel_padstate_thread, &telemetry_padstate_thread);
 
-#if defined(CONFIG_SENSORS_NAU7802) && defined(CONFIG_ADC_ADS1115)
+#if defined(CONFIG_SENSORS_NAU7802) && defined(CONFIG_ADC_ADS1115) && defined(CONFIG_SENSORS_MCP9600)
 
     sensor_mass_t sensor_mass = {
         .known_mass_grams = SENSOR_MASS_KNOWN_WEIGHT, .known_mass_point = SENSOR_MASS_KNOWN_POINT, .available = true};
 
     err = sensor_mass_init(&sensor_mass);
     if (err < 0) {
+#ifdef CONFIG_SYSTEM_NSH
         fprintf(stderr, "Could not initialize mass sensor: %d\n", err);
+#endif
         sensor_mass.available = false;
     }
 
     if (sensor_mass.available) {
         err = sensor_mass_calibrate(&sensor_mass);
         if (err < 0) {
+#ifdef CONFIG_SYSTEM_NSH
             fprintf(stderr, "Could not calibrate mass sensor: %d\n", err);
+#endif
             sensor_mass.available = false;
         }
     }
 
-    /* Channel numbers go from 0 to 8, 0-7 are differential between the pins, 4-7 are single ended */
+    sensor_temp_t sensor_temp[] = {
+        {.dev = "sensor_ambient_temp0", .available = true},
+        {.dev = "sensor_ambient_temp1", .available = true},
+    };
+
+    for (int i = 0; i < sizeof(sensor_temp) / sizeof(sensor_temp[0]); i++) {
+        err = sensor_temp_init(&sensor_temp[i], sensor_temp[i].dev);
+        if (err < 0) {
+#ifdef CONFIG_SYSTEM_NSH
+            fprintf(stderr, "Could not initialize temperature sensor: %d\n", err);
+#endif
+            sensor_temp[i].available = false;
+        }
+    }
+
+    /* Channel numbers go from 0 to 7, 0-7 are differential between the pins, 4-7 are single ended */
     adc_device_t adc_devices[] = {{.id = 0,
                                    .fd = -1,
                                    .devpath = "/dev/adc0", /* 0x48 */
@@ -328,6 +347,19 @@ void *telemetry_run(void *arg) {
             } else {
                 /* I made the id of this one 3, check on this*/
                 telemetry_publish_data(&telem, TELEM_MASS, 3, time_ms, (void *)&sensor_mass.data.force);
+            }
+        }
+
+        for (int i = 0; i < sizeof(sensor_temp) / sizeof(sensor_temp[0]); i++) {
+            if (sensor_temp[i].available) {
+                err = sensor_temp_fetch(&sensor_temp[i]);
+                if (err < 0) {
+#ifdef CONFIG_SYSTEM_NSH
+                    fprintf(stderr, "Error fetching temperature data: %d\n", err);
+#endif
+                } else {
+                    telemetry_publish_data(&telem, TELEM_TEMP, i, time_ms, (void *)&sensor_temp[i].data.temperature);
+                }
             }
         }
     }
