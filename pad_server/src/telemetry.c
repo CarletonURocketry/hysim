@@ -20,6 +20,8 @@
 
 #define deref(type, data) *((type *)(data))
 
+#define arr_len(arr) (sizeof(arr) / sizeof(arr[0]))
+
 /* Helper function for returning an error code from a thread */
 
 #define thread_return(e) pthread_exit((void *)(unsigned long)((e)))
@@ -343,7 +345,9 @@ static void sensor_telemetry(telemetry_args_t *args, telemetry_sock_t *telem) {
         },
     };
 
-    for (int i = 0; i < sizeof(adc_devices) / sizeof(adc_devices[0]); i++) {
+    /* Open ADC device file descriptors */
+
+    for (int i = 0; i < arr_len(adc_devices); i++) {
         adc_devices[i].fd = open(adc_devices[i].devpath, O_RDONLY);
         if (adc_devices[i].fd < 0) {
             fprintf(stderr, "Could not open ADC device %s: %s\n", adc_devices[i].devpath, strerror(errno));
@@ -368,33 +372,17 @@ static void sensor_telemetry(telemetry_args_t *args, telemetry_sock_t *telem) {
             }
 
             err = adc_read_value(&adc_devices[i]);
-#ifdef CONFIG_SYSTEM_NSH
-            if (err < 0) {
-                fprintf(stderr, "Failed to read ADC value from id %d: %d\n", adc_devices[i].id, err);
-                continue;
-            }
-#endif
-
             for (int j = 0; j < adc_devices[i].n_channels; j++) {
                 adc_channel_t channel = adc_devices[i].channels[j];
 
                 int32_t adc_val = adc_devices[i].sample[channel.channel_num].am_data;
+
                 /* For each channel of data we find the corresponding information */
+
                 int32_t sensor_val = 0;
                 err = adc_sensor_val_conversion(&channel, adc_val, &sensor_val);
-#ifdef CONFIG_SYSTEM_NSH
-                if (err < 0) {
-                    fprintf(stderr, "ADC %d pin %d: failed to convert value\n", i, channel.channel_num - 4);
-                    continue;
-                }
-                fprintf(stderr, "ADC %d pin %d value %ld\n", i, channel.channel_num - 4, adc_val);
-#endif
-
                 telemetry_publish_data(telem, channel.type, channel.sensor_id, time_ms, (void *)&sensor_val);
             }
-#ifdef CONFIG_SYSTEM_NSH
-            printf("\n");
-#endif
         }
 
         if (sensor_mass.available) {
