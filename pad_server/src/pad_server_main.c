@@ -41,6 +41,7 @@ controller_args_t controller_args = {.port = CONTROL_PORT, .state = &state};
 pthread_t telem_thread;
 telemetry_args_t telemetry_args = {.port = TELEMETRY_PORT, .state = &state, .data_file = NULL, .addr = MULTICAST_ADDR};
 
+#ifdef DESKTOP_BUILD
 void int_handler(int sig) {
 
     (void)(sig);
@@ -67,6 +68,7 @@ void int_handler(int sig) {
 
     exit(EXIT_SUCCESS);
 }
+#endif
 
 #if !defined(CONFIG_SYSTEM_NSH) && defined(CONFIG_CDCACM_CONSOLE)
 /* Starts the NuttX USB serial interface.
@@ -146,6 +148,8 @@ static int usb_init(void) {
  */
 
 int main(int argc, char **argv) {
+    int c;
+    int err;
 
 #if !defined(DESKTOP_BUILD) && !defined(CONFIG_SYSTEM_NSH) && defined(CONFIG_CDCACM_CONSOLE)
     if (usb_init()) {
@@ -161,7 +165,6 @@ int main(int argc, char **argv) {
 
     /* Parse command line options. */
 
-    int c;
     while ((c = getopt(argc, argv, ":ht:c:f:a:")) != -1) {
         switch (c) {
         case 'h':
@@ -201,8 +204,6 @@ int main(int argc, char **argv) {
     /* Set up the state to be shared */
     padstate_init(&state);
 
-    int err;
-
     /* Start controller thread */
     err = pthread_create(&controller_thread, NULL, controller_run, &controller_args);
     if (err) {
@@ -235,8 +236,10 @@ int main(int argc, char **argv) {
     }
 #endif
 
-    /* Attach signal handler */
+#ifdef DESKTOP_BUILD
+    /* Attach signal handler for Ctrl + C termination on desktop */
     signal(SIGINT, int_handler);
+#endif
 
     /* Wait for control thread to end */
     err = pthread_join(controller_thread, NULL);

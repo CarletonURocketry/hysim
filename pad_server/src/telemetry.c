@@ -66,6 +66,7 @@ static int telemetry_publish(telemetry_sock_t *sock, struct msghdr *msg) {
     msg->msg_name = &sock->addr;
     msg->msg_namelen = sizeof(sock->addr);
     sendmsg(sock->sock, msg, MSG_NOSIGNAL);
+    // TODO: handle error from sendmsg
     return 0;
 }
 
@@ -106,6 +107,7 @@ static void telemetry_publish_data(telemetry_sock_t *sock, telem_subtype_e type,
     };
 
     switch (type) {
+
     case TELEM_PRESSURE:
         pressure_body.id = id;
         pressure_body.time = time;
@@ -113,6 +115,7 @@ static void telemetry_publish_data(telemetry_sock_t *sock, telem_subtype_e type,
         pkt[1].iov_base = &pressure_body;
         pkt[1].iov_len = sizeof(pressure_body);
         break;
+
     case TELEM_MASS:
         mass_body.id = id;
         mass_body.time = time;
@@ -120,6 +123,7 @@ static void telemetry_publish_data(telemetry_sock_t *sock, telem_subtype_e type,
         pkt[1].iov_base = &mass_body;
         pkt[1].iov_len = sizeof(mass_body);
         break;
+
     case TELEM_TEMP:
         temperature_body.id = id;
         temperature_body.time = time;
@@ -127,16 +131,19 @@ static void telemetry_publish_data(telemetry_sock_t *sock, telem_subtype_e type,
         pkt[1].iov_base = &temperature_body;
         pkt[1].iov_len = sizeof(temperature_body);
         break;
+
     case TELEM_CONT:
         continuity_body.time = time;
         continuity_body.state = deref(continuity_state_e, data);
         pkt[1].iov_base = &continuity_body;
         pkt[1].iov_len = sizeof(continuity_body);
         break;
+
     default:
         fprintf(stderr, "Invalid telemetry data type: %u\n", type);
         return;
     }
+
     struct msghdr msg = {
         .msg_name = NULL,
         .msg_namelen = 0,
@@ -147,11 +154,11 @@ static void telemetry_publish_data(telemetry_sock_t *sock, telem_subtype_e type,
         .msg_flags = 0,
     };
     telemetry_publish(sock, &msg);
-    usleep(1000);
 }
 
+#if defined(DESKTOP_BUILD) || defined(CONFIG_TELEM_MOCK)
 /* A function to create random data if not put in any file to read from
- * @params arg The argument to run the telemetry thread
+ * @params telem The telemetry socket to send random data over
  */
 static void random_data(telemetry_sock_t *telem) {
 
@@ -197,37 +204,88 @@ static void random_data(telemetry_sock_t *telem) {
 }
 
 /*
- * Run the thread responsible for transmitting telemetry data.
- * @param arg The arguments to the telemetry thread, of type `telemetry_args_t`.
+ * Generate mock telemetry data from either the provided file or randomly generated data.
+ * @param args The telemetry thread arguments
+ * @param telem The telemetry socket to output data on
  */
-void *telemetry_run(void *arg) {
-
-    telemetry_args_t *args = (telemetry_args_t *)(arg);
+static void mock_telemetry(telemetry_args_t *args, telemetry_sock_t *telem) {
+    int err = 0;
     char buffer[BUFSIZ];
+
+    /* NULL telemetry file means generate random data */
+
+    if (args->data_file == NULL) {
+        random_data(telem);
+    } else {
+
+        /* Open telemetry file */
+        FILE *data = fopen(args->data_file, "r");
+        if (data == NULL) {
+            fprintf(stderr, "Could not open telemetry file \"%s\" with error: %s\n", args->data_file, strerror(errno));
+            thread_return(err);
+        }
+
+        /* Start transmitting telemetry to active clients */
+        for (;;) {
+
+            /* Handle file errors */
+            if (ferror(data)) {
+                fprintf(stderr, "Error reading telemetry file: %s\n", strerror(errno));
+                thread_return(err);
+            }
+
+            /* Read from file in a loop */
+            if (feof(data)) {
+                rewind(data);
+            }
+
+            /* Read next line */
+            if (fgets(buffer, sizeof(buffer), data) == NULL) {
+                continue;
+            }
+
+            /* TODO: parse all data */
+
+            char *rest = buffer;
+            char *time_str = strtok_r(rest, ",", &rest);
+            uint32_t time = strtoul(time_str, NULL, 10);
+            char *pstr = strtok_r(rest, ",", &rest);
+            uint32_t pressure = strtoul(pstr, NULL, 10);
+
+            header_p hdr = {.type = TYPE_TELEM, .subtype = TELEM_PRESSURE};
+            pressure_p body = {.id = 1, .time = time, .pressure = pressure};
+
+            struct iovec pkt[2] = {
+                {.iov_base = &hdr, .iov_len = sizeof(hdr)},
+                {.iov_base = &body, .iov_len = sizeof(body)},
+            };
+            struct msghdr msg = {
+                .msg_iov = pkt,
+                .msg_iovlen = (sizeof(pkt) / sizeof(struct iovec)),
+            };
+            telemetry_publish(telem, &msg);
+            usleep(1000000);
+        }
+    }
+}
+#endif
+
+#ifndef DESKTOP_BUILD
+/*
+ * Thread logic responsible for reading data from sensors and publishing the data as telemetry.
+ * NOTE: only works on NuttX builds
+ * @param args The telemetry thread arguments
+ * @param telem The telemetry socket to output data on
+ */
+static void sensor_telemetry(telemetry_args_t *args, telemetry_sock_t *telem) {
     int err;
-
-    /* Start telemetry socket */
-    telemetry_sock_t telem;
-    err = telemetry_init(&telem, args->port, args->addr);
-    if (err) {
-        fprintf(stderr, "Could not start telemetry socket: %s\n", strerror(err));
-        thread_return(err);
-    }
-    pthread_cleanup_push(telemetry_cleanup, &telem);
-
-    pthread_t telemetry_padstate_thread;
-    telemetry_padstate_args_t telemetry_padstate_args = {.sock = &telem, .state = args->state};
-    err = pthread_create(&telemetry_padstate_thread, NULL, telemetry_update_padstate, &telemetry_padstate_args);
-    if (err) {
-        fprintf(stderr, "Could not start telemetry padstate sending thread: %s\n", strerror(err));
-        thread_return(err);
-    }
-    pthread_cleanup_push(telemetry_cancel_padstate_thread, &telemetry_padstate_thread);
-
 #if defined(CONFIG_SENSORS_NAU7802) && defined(CONFIG_ADC_ADS1115)
 
     sensor_mass_t sensor_mass = {
-        .known_mass_grams = SENSOR_MASS_KNOWN_WEIGHT, .known_mass_point = SENSOR_MASS_KNOWN_POINT, .available = true};
+        .known_mass_grams = SENSOR_MASS_KNOWN_WEIGHT,
+        .known_mass_point = SENSOR_MASS_KNOWN_POINT,
+        .available = true,
+    };
 
     err = sensor_mass_init(&sensor_mass);
     if (err < 0) {
@@ -244,28 +302,46 @@ void *telemetry_run(void *arg) {
     }
 
     /* Channel numbers go from 0 to 8, 0-7 are differential between the pins, 4-7 are single ended */
-    adc_device_t adc_devices[] = {{.id = 0,
-                                   .fd = -1,
-                                   .devpath = "/dev/adc0", /* 0x48 */
-                                   .n_channels = 4,
-                                   .channels = {{.channel_num = 4, .sensor_id = 0, .type = TELEM_TEMP},
-                                                {.channel_num = 5, .sensor_id = 1, .type = TELEM_TEMP},
-                                                {.channel_num = 6, .sensor_id = 4, .type = TELEM_PRESSURE},
-                                                {.channel_num = 7, .sensor_id = 5, .type = TELEM_PRESSURE}}},
-                                  {.id = 1,
-                                   .fd = -1,
-                                   .devpath = "/dev/adc1", /* 0x49 */
-                                   .n_channels = 4,
-                                   .channels = {{.channel_num = 4, .sensor_id = 0, .type = TELEM_PRESSURE},
-                                                {.channel_num = 5, .sensor_id = 1, .type = TELEM_PRESSURE},
-                                                {.channel_num = 6, .sensor_id = 2, .type = TELEM_PRESSURE},
-                                                {.channel_num = 7, .sensor_id = 3, .type = TELEM_PRESSURE}}},
-                                  {.id = 2,
-                                   .fd = -1,
-                                   .devpath = "/dev/adc2", /* 0x4A */
-                                   .n_channels = 2,
-                                   .channels = {{.channel_num = 4, .sensor_id = 0, .type = TELEM_MASS},
-                                                {.channel_num = 6, .sensor_id = 1, .type = TELEM_CONT}}}};
+
+    adc_device_t adc_devices[] = {
+        {
+            .id = 0,
+            .fd = -1,
+            .devpath = "/dev/adc0", /* 0x48 */
+            .n_channels = 4,
+            .channels =
+                {
+                    {.channel_num = 4, .sensor_id = 0, .type = TELEM_TEMP},
+                    {.channel_num = 5, .sensor_id = 1, .type = TELEM_TEMP},
+                    {.channel_num = 6, .sensor_id = 4, .type = TELEM_PRESSURE},
+                    {.channel_num = 7, .sensor_id = 5, .type = TELEM_PRESSURE},
+                },
+        },
+        {
+            .id = 1,
+            .fd = -1,
+            .devpath = "/dev/adc1", /* 0x49 */
+            .n_channels = 4,
+            .channels =
+                {
+                    {.channel_num = 4, .sensor_id = 0, .type = TELEM_PRESSURE},
+                    {.channel_num = 5, .sensor_id = 1, .type = TELEM_PRESSURE},
+                    {.channel_num = 6, .sensor_id = 2, .type = TELEM_PRESSURE},
+                    {.channel_num = 7, .sensor_id = 3, .type = TELEM_PRESSURE},
+                },
+        },
+        {
+            .id = 2,
+            .fd = -1,
+            .devpath = "/dev/adc2", /* 0x4A */
+            .n_channels = 2,
+            .channels =
+                {
+                    {.channel_num = 4, .sensor_id = 0, .type = TELEM_MASS},
+                    {.channel_num = 6, .sensor_id = 1, .type = TELEM_CONT},
+                },
+        },
+    };
 
     for (int i = 0; i < sizeof(adc_devices) / sizeof(adc_devices[0]); i++) {
         adc_devices[i].fd = open(adc_devices[i].devpath, O_RDONLY);
@@ -333,62 +409,47 @@ void *telemetry_run(void *arg) {
     }
 
 #endif
+}
+#endif
 
-    /* Null telemetry file means nothing to do */
-    if (args->data_file == NULL) {
-        random_data(&telem);
-    }
+/*
+ * Run the thread responsible for transmitting telemetry data.
+ * @param arg The arguments to the telemetry thread, of type `telemetry_args_t`.
+ */
+void *telemetry_run(void *arg) {
+    telemetry_args_t *args = (telemetry_args_t *)(arg);
+    int err;
 
-    /* Open telemetry file */
-    FILE *data = fopen(args->data_file, "r");
-    if (data == NULL) {
-        fprintf(stderr, "Could not open telemetry file \"%s\" with error: %s\n", args->data_file, strerror(errno));
+    /* Start telemetry socket */
+
+    telemetry_sock_t telem;
+    err = telemetry_init(&telem, args->port, args->addr);
+    if (err) {
+        fprintf(stderr, "Could not start telemetry socket: %s\n", strerror(err));
         thread_return(err);
     }
+    pthread_cleanup_push(telemetry_cleanup, &telem);
 
-    /* Start transmitting telemetry to active clients */
-    for (;;) {
+    /* Start thread to periodically update telemetry stream with the pad state */
 
-        /* Handle file errors */
-        if (ferror(data)) {
-            fprintf(stderr, "Error reading telemetry file: %s\n", strerror(errno));
-            thread_return(err);
-        }
-
-        /* Read from file in a loop */
-        if (feof(data)) {
-            rewind(data);
-        }
-
-        /* Read next line */
-        if (fgets(buffer, sizeof(buffer), data) == NULL) {
-            continue;
-        }
-
-        /* TODO: parse all data */
-
-        char *rest = buffer;
-        char *time_str = strtok_r(rest, ",", &rest);
-        uint32_t time = strtoul(time_str, NULL, 10);
-        char *mass_str = strtok_r(rest, ",", &rest);
-        uint32_t mass = strtoul(mass_str, NULL, 10);
-        char *pstr = strtok_r(rest, ",", &rest);
-        uint32_t pressure = strtoul(pstr, NULL, 10);
-
-        header_p hdr = {.type = TYPE_TELEM, .subtype = TELEM_PRESSURE};
-        pressure_p body = {.id = 1, .time = time, .pressure = pressure};
-
-        struct iovec pkt[2] = {
-            {.iov_base = &hdr, .iov_len = sizeof(hdr)},
-            {.iov_base = &body, .iov_len = sizeof(body)},
-        };
-        struct msghdr msg = {
-            .msg_iov = pkt,
-            .msg_iovlen = (sizeof(pkt) / sizeof(struct iovec)),
-        };
-        telemetry_publish(&telem, &msg);
-        usleep(1000000);
+    pthread_t telemetry_padstate_thread;
+    telemetry_padstate_args_t telemetry_padstate_args = {.sock = &telem, .state = args->state};
+    err = pthread_create(&telemetry_padstate_thread, NULL, telemetry_update_padstate, &telemetry_padstate_args);
+    if (err) {
+        fprintf(stderr, "Could not start telemetry padstate sending thread: %s\n", strerror(err));
+        thread_return(err);
     }
+    pthread_cleanup_push(telemetry_cancel_padstate_thread, &telemetry_padstate_thread);
+
+#if defined(DESKTOP_BUILD) || defined(CONFIG_TELEM_MOCK)
+    /* Start mock telemetry if on desktop build or if we want mock data during */
+
+    mock_telemetry(args, &telem);
+#elif !defined(CONFIG_TELEM_MOCK) && !defined(DESKTOP_BUILD)
+
+    /* Start real telemetry if on NuttX and not mocking. */
+    sensor_telemetry(args, &telem);
+#endif
 
     thread_return(0); // Normal return
 
@@ -440,6 +501,11 @@ void telemetry_send_padstate(padstate_t *state, telemetry_sock_t *sock) {
     }
 }
 
+/*
+ * Thread which periodically sends information about the pad's state.
+ * @param arg Arguments of type `telemetry_padstate_args_t`
+ * @return 0 on success, error code on failure (thread dies)
+ */
 void *telemetry_update_padstate(void *arg) {
     telemetry_padstate_args_t *args = (telemetry_padstate_args_t *)arg;
     padstate_t *state = args->state;
