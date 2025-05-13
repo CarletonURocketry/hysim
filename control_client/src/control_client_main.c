@@ -12,10 +12,10 @@
 #include <unistd.h>
 
 #ifndef DESKTOP_BUILD
+#include <debug.h>
 #include <nuttx/ioexpander/gpio.h>
 #include <nuttx/usb/cdcacm.h>
 #include <sys/boardctl.h>
-#include <debug.h>
 
 #if defined(CONFIG_NSH_NETINIT) && !defined(CONFIG_SYSTEM_NSH)
 #include "netutils/netinit.h"
