@@ -156,7 +156,7 @@ static void telemetry_publish_data(telemetry_sock_t *sock, telem_subtype_e type,
     telemetry_publish(sock, &msg);
 }
 
-#if defined(DESKTOP_BUILD) || defined(CONFIG_TELEM_MOCK)
+#if defined(DESKTOP_BUILD) || defined(CONFIG_HYSIM_PAD_SERVER_MOCK_DATA)
 /* A function to create random data if not put in any file to read from
  * @params telem The telemetry socket to send random data over
  */
@@ -441,11 +441,11 @@ void *telemetry_run(void *arg) {
     }
     pthread_cleanup_push(telemetry_cancel_padstate_thread, &telemetry_padstate_thread);
 
-#if defined(DESKTOP_BUILD) || defined(CONFIG_TELEM_MOCK)
+#if defined(DESKTOP_BUILD) || defined(CONFIG_HYSIM_PAD_SERVER_MOCK_DATA)
     /* Start mock telemetry if on desktop build or if we want mock data during */
 
     mock_telemetry(args, &telem);
-#elif !defined(CONFIG_TELEM_MOCK) && !defined(DESKTOP_BUILD)
+#elif !defined(CONFIG_HYSIM_PAD_SERVER_MOCK_DATA) && !defined(DESKTOP_BUILD)
 
     /* Start real telemetry if on NuttX and not mocking. */
     sensor_telemetry(args, &telem);
