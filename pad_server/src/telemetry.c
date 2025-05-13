@@ -390,7 +390,7 @@ static void sensor_telemetry(telemetry_args_t *args, telemetry_sock_t *telem) {
                 fprintf(stderr, "ADC %d pin %d value %ld\n", i, channel.channel_num - 4, adc_val);
 #endif
 
-                telemetry_publish_data(&telem, channel.type, channel.sensor_id, time_ms, (void *)&sensor_val);
+                telemetry_publish_data(telem, channel.type, channel.sensor_id, time_ms, (void *)&sensor_val);
             }
 #ifdef CONFIG_SYSTEM_NSH
             printf("\n");
@@ -403,7 +403,7 @@ static void sensor_telemetry(telemetry_args_t *args, telemetry_sock_t *telem) {
                 fprintf(stderr, "Error fetching mass data: %d\n", err);
             } else {
                 /* I made the id of this one 3, check on this*/
-                telemetry_publish_data(&telem, TELEM_MASS, 3, time_ms, (void *)&sensor_mass.data.force);
+                telemetry_publish_data(telem, TELEM_MASS, 3, time_ms, (void *)&sensor_mass.data.force);
             }
         }
     }
@@ -464,39 +464,40 @@ void *telemetry_run(void *arg) {
  */
 void telemetry_send_padstate(padstate_t *state, telemetry_sock_t *sock) {
     struct timespec time;
-    clock_gettime(CLOCK_MONOTONIC, &time);
-    uint32_t time_ms = time.tv_sec * 1000 + time.tv_nsec / 1000000;
-
-    // sending arming update
-    header_p hdr = {.type = TYPE_TELEM, .subtype = TELEM_ARM};
-    arm_lvl_e arm_lvl = padstate_get_level(state);
-    arm_state_p body = {.time = time_ms, .state = arm_lvl};
-
-    struct iovec pkt[2] = {
-        {.iov_base = &hdr, .iov_len = sizeof(hdr)},
-        {.iov_base = &body, .iov_len = sizeof(body)},
-    };
+    header_p hdr;
+    struct iovec pkt[2];
     struct msghdr msg = {
         .msg_iov = pkt,
         .msg_iovlen = (sizeof(pkt) / sizeof(struct iovec)),
     };
+
+    /* Find the current time in milliseconds */
+
+    clock_gettime(CLOCK_MONOTONIC, &time);
+    uint32_t time_ms = time.tv_sec * 1000 + time.tv_nsec / 1000000;
+
+    /* Send arming update */
+
+    arm_lvl_e arm_lvl = padstate_get_level(state);
+    arm_state_p arm_body = {.time = time_ms, .state = arm_lvl};
+    hdr = (header_p){.type = TYPE_TELEM, .subtype = TELEM_ARM};
+
+    pkt[0] = (struct iovec){.iov_base = &hdr, .iov_len = sizeof(hdr)};
+    pkt[1] = (struct iovec){.iov_base = &arm_body, .iov_len = sizeof(arm_body)};
+
     telemetry_publish(sock, &msg);
 
-    // sending actuator update
+    /* Send actuator updates */
+
     for (int i = 0; i < NUM_ACTUATORS; i++) {
-        header_p hdr = {.type = TYPE_TELEM, .subtype = TELEM_ACT};
+        hdr = (header_p){.type = TYPE_TELEM, .subtype = TELEM_ACT};
         bool act_state;
         padstate_get_actstate(state, i, &act_state);
-        act_state_p body = {.time = time_ms, .id = i, .state = act_state};
+        act_state_p act_body = {.time = time_ms, .id = i, .state = act_state};
 
-        struct iovec pkt[2] = {
-            {.iov_base = &hdr, .iov_len = sizeof(hdr)},
-            {.iov_base = &body, .iov_len = sizeof(body)},
-        };
-        struct msghdr msg = {
-            .msg_iov = pkt,
-            .msg_iovlen = (sizeof(pkt) / sizeof(struct iovec)),
-        };
+        pkt[0] = (struct iovec){.iov_base = &hdr, .iov_len = sizeof(hdr)};
+        pkt[1] = (struct iovec){.iov_base = &act_body, .iov_len = sizeof(act_body)};
+
         telemetry_publish(sock, &msg);
     }
 }
