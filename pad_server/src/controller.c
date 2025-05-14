@@ -15,7 +15,7 @@
 #define thread_return(e) pthread_exit((void *)(unsigned long)((e)))
 
 #ifndef KEEPALIVE_N_PROBES
-#define KEEPALIVE_N_PROBES 10
+#define KEEPALIVE_N_PROBES 5
 #endif
 
 #ifndef KEEPALIVE_INTERVAL_SECS
