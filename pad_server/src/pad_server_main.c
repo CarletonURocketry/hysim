@@ -151,6 +151,10 @@ int main(int argc, char **argv) {
     int c;
     int err;
 
+#if !defined(DESKTOP_BUILD) && !defined(CONFIG_SYSTEM_NSH)
+    boardctl(BOARDIOC_INIT, 0);
+#endif
+
 #if !defined(DESKTOP_BUILD) && !defined(CONFIG_SYSTEM_NSH) && defined(CONFIG_CDCACM_CONSOLE)
     if (usb_init()) {
         return EXIT_FAILURE;
@@ -160,7 +164,6 @@ int main(int argc, char **argv) {
 
 #if defined(CONFIG_NSH_NETINIT) && !defined(CONFIG_SYSTEM_NSH)
     netinit_bringup();
-    sleep(2);
 #endif
 
     /* Parse command line options. */

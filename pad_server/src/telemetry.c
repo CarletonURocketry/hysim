@@ -281,8 +281,7 @@ static void mock_telemetry(telemetry_args_t *args, telemetry_sock_t *telem) {
  */
 static void sensor_telemetry(telemetry_args_t *args, telemetry_sock_t *telem) {
     int err;
-#if defined(CONFIG_SENSORS_NAU7802) && defined(CONFIG_ADC_ADS1115)
-
+#if defined(CONFIG_SENSORS_NAU7802)
     sensor_mass_t sensor_mass = {
         .known_mass_grams = SENSOR_MASS_KNOWN_WEIGHT,
         .known_mass_point = SENSOR_MASS_KNOWN_POINT,
@@ -302,7 +301,9 @@ static void sensor_telemetry(telemetry_args_t *args, telemetry_sock_t *telem) {
             sensor_mass.available = false;
         }
     }
+#endif
 
+#if defined(CONFIG_ADC_ADS1115)
     /* Channel numbers go from 0 to 8, 0-7 are differential between the pins, 4-7 are single ended */
 
     adc_device_t adc_devices[] = {
@@ -353,12 +354,14 @@ static void sensor_telemetry(telemetry_args_t *args, telemetry_sock_t *telem) {
             fprintf(stderr, "Could not open ADC device %s: %s\n", adc_devices[i].devpath, strerror(errno));
         }
     }
+#endif
 
     for (;;) {
         struct timespec time_t;
         clock_gettime(CLOCK_MONOTONIC, &time_t);
         uint32_t time_ms = time_t.tv_sec * 1000 + time_t.tv_nsec / 1000000;
 
+#if defined(CONFIG_ADC_ADS1115)
         for (int i = 0; i < sizeof(adc_devices) / sizeof(adc_devices[0]); i++) {
 
             if (adc_devices[i].fd < 0) {
@@ -382,9 +385,12 @@ static void sensor_telemetry(telemetry_args_t *args, telemetry_sock_t *telem) {
                 int32_t sensor_val = 0;
                 err = adc_sensor_val_conversion(&channel, adc_val, &sensor_val);
                 telemetry_publish_data(telem, channel.type, channel.sensor_id, time_ms, (void *)&sensor_val);
+                printf("Published ADC data\n");
             }
         }
+#endif
 
+#if defined(CONFIG_SENSORS_NAU7802)
         if (sensor_mass.available) {
             err = sensor_mass_fetch(&sensor_mass);
             if (err < 0) {
@@ -394,9 +400,8 @@ static void sensor_telemetry(telemetry_args_t *args, telemetry_sock_t *telem) {
                 telemetry_publish_data(telem, TELEM_MASS, 3, time_ms, (void *)&sensor_mass.data.force);
             }
         }
-    }
-
 #endif
+    }
 }
 #endif
 
@@ -436,6 +441,7 @@ void *telemetry_run(void *arg) {
 #elif !defined(CONFIG_HYSIM_PAD_SERVER_MOCK_DATA) && !defined(DESKTOP_BUILD)
 
     /* Start real telemetry if on NuttX and not mocking. */
+    printf("Starting real telemetry\n");
     sensor_telemetry(args, &telem);
 #endif
 
