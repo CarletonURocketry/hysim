@@ -147,7 +147,7 @@ int adc_sensor_val_conversion(adc_channel_t *channel, int32_t adc_val, int32_t *
 
     case TELEM_MASS: {
         /* 0 - 2,500lbs according to Antoine, using values in Newtons */
-        *output_val = map_value(sensor_voltage, -5.0, 5.0, 0.0, 11120.5);
+        *output_val = map_value(sensor_voltage, 0, 5.0, 0.0, 11120.5);
     } break;
 
     case TELEM_CONT: {
