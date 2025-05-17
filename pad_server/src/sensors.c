@@ -132,16 +132,22 @@ int adc_sensor_val_conversion(adc_channel_t *channel, int32_t adc_val, int32_t *
     case TELEM_PRESSURE: {
         double val_max;
         if (channel->sensor_id == 4 || channel->sensor_id == 5) {
-            val_max = 1000.0;
-        } else {
             val_max = 2500.0;
+        } else {
+            val_max = 1000.0;
         }
-        *output_val = map_value(sensor_voltage, 1.0, 5.0, 0.0, val_max);
+
+        if (sensor_voltage < 1.0) {
+            *output_val = 0;
+            break;
+        }
+
+        *output_val = 1000 * map_value(sensor_voltage, 1.0, 5.0, 0.0, val_max);
     } break;
 
     case TELEM_MASS: {
-        /* 0 - 2,500lbs according to Antoine */
-        *output_val = map_value(sensor_voltage, 0.0, 5.0, 0.0, 2500.0);
+        /* 0 - 2,500lbs according to Antoine, using values in Newtons */
+        *output_val = map_value(sensor_voltage, -5.0, 5.0, 0.0, 11120.5);
     } break;
 
     case TELEM_CONT: {

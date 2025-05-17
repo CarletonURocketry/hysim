@@ -340,7 +340,7 @@ static void sensor_telemetry(telemetry_args_t *args, telemetry_sock_t *telem) {
             .n_channels = 2,
             .channels =
                 {
-                    {.channel_num = 4, .sensor_id = 0, .type = TELEM_MASS},
+                    {.channel_num = 4, .sensor_id = 1, .type = TELEM_MASS},
                     {.channel_num = 6, .sensor_id = 1, .type = TELEM_CONT},
                 },
         },
@@ -397,7 +397,7 @@ static void sensor_telemetry(telemetry_args_t *args, telemetry_sock_t *telem) {
                 fprintf(stderr, "Error fetching mass data: %d\n", err);
             } else {
                 /* I made the id of this one 3, check on this*/
-                telemetry_publish_data(telem, TELEM_MASS, 3, time_ms, (void *)&sensor_mass.data.force);
+                telemetry_publish_data(telem, TELEM_MASS, 0, time_ms, (void *)&sensor_mass.data.force);
             }
         }
 #endif
