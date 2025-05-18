@@ -1,6 +1,21 @@
 #include "sensors.h"
 #include <math.h>
 
+/*
+ * Maps a value in the input range to the output range.
+ * @param value The value to map
+ * @param in_min The minimum value of the input range
+ * @param in_max The maximum value of the input range
+ * @param out_min The minimum value of the output range
+ * @param out_max The maximum value of the output range
+ * @return The newly mapped value
+ */
+static double map_value(double value, double in_min, double in_max, double out_min, double out_max) {
+    double slope = (out_max - out_min) / (in_max - in_min);
+    if (slope == 0) return 0;
+    return out_min + slope * (value - in_min);
+}
+
 #ifdef CONFIG_ADC_ADS1115
 /*
  * A function to trigger ADC conversion
@@ -141,56 +156,44 @@ int sensor_mass_calibrate(sensor_mass_t *sensor_mass) {
 
 #ifdef CONFIG_ADC_ADS1115
 
+/*
+ * Convert ADC voltage value to the corresponding measurement value of the sensor.
+ * @param channel The ADC channel being measured
+ * @param adc_val The value read by the ADC channel
+ * @param output_val The outcome of the measurement after calculation
+ */
 int adc_sensor_val_conversion(adc_channel_t *channel, int32_t adc_val, int32_t *output_val) {
+
     /* 6.144 is the FSR of the ADC at PGA value 0 */
+
     double sensor_voltage = ((double)adc_val * 6.144) / (32768.0);
 
-    if (channel->type == TELEM_PRESSURE) {
-        double v_min = 1.0;
-        double v_max = 5.0;
-        double val_min = 0;
+    switch (channel->type) {
+
+    case TELEM_PRESSURE: {
         double val_max;
-
         if (channel->sensor_id == 4 || channel->sensor_id == 5) {
-            val_max = 1000;
+            val_max = 1000.0;
         } else {
-            val_max = 2500;
+            val_max = 2500.0;
         }
+        *output_val = map_value(sensor_voltage, 1.0, 5.0, 0.0, val_max);
+    } break;
 
-        if (sensor_voltage < v_min || sensor_voltage > v_max) {
-            return -1;
-        }
+    case TELEM_MASS: {
+        /* 0 - 2,500lbs according to Antoine */
+        *output_val = map_value(sensor_voltage, 0.0, 5.0, 0.0, 2500.0);
+    } break;
 
-        double slope = (double)(v_max - v_min) / (double)(val_max - val_min);
-        if (slope == 0) {
-            return -1;
-        }
-        double y_intercept = v_min - slope * val_min;
-        *output_val = (sensor_voltage - y_intercept) / slope;
-
-    } else if (channel->type == TELEM_MASS) {
-        /* This was what was in the old code but honestly it looks sus */
-        // (double)(500 / 2.2) / (double)(1024);
-
-        double v_min = -5.0;
-        double v_max = 5.0;
-        double val_min = 0;    /* TODO FILL IN CORRECT VALUES */
-        double val_max = 1000; /* TODO FILL IN CORRECT VALUES */
-
-        double slope = (double)(v_max - v_min) / (double)(val_max - val_min);
-        if (slope == 0) {
-            return -1;
-        }
-        double y_intercept = v_min - slope * val_min;
-        *output_val = (sensor_voltage - y_intercept) / slope;
-
-    } else if (channel->type == TELEM_CONT) {
+    case TELEM_CONT: {
         if (sensor_voltage <= 1) { /* Threshold voltage to switch state*/
             *output_val = 0;
         } else {
             *output_val = 1;
         }
-    } else if (channel->type == TELEM_TEMP) {
+    } break;
+
+    case TELEM_TEMP: {
         /* If you're wondering what is this I don't know either, it was pulled from the old code */
 
         double A, B, C;
@@ -219,10 +222,8 @@ int adc_sensor_val_conversion(adc_channel_t *channel, int32_t adc_val, int32_t *
         } else {
             *output_val = 0;
         }
-    } else {
-        return -1;
+    } break;
     }
-
     return 0;
 }
 #endif

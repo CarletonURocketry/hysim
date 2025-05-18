@@ -22,5 +22,9 @@ config HYSIM_PAD_SERVER_STACKSIZE
         int "Pad server stack size"
         default DEFAULT_TASK_STACKSIZE
 
+config HYSIM_PAD_SERVER_MOCK_DATA
+        bool "Use mock data instead of real sensors"
+        default n
+
 endif
 
