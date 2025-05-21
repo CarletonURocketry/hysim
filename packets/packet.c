@@ -50,7 +50,7 @@ void packet_pressure_init(pressure_p *p, uint8_t id, uint32_t time, int32_t pres
     p->pressure = pressure;
 }
 
-void packet_mass_init(mass_p *p, uint8_t id, uint32_t time, uint32_t mass) {
+void packet_mass_init(mass_p *p, uint8_t id, uint32_t time, int32_t mass) {
     p->id = id;
     p->time = time;
     p->mass = mass;
