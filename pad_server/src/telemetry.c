@@ -398,7 +398,6 @@ static void sensor_telemetry(telemetry_args_t *args, telemetry_sock_t *telem) {
                 int32_t sensor_val = 0;
                 err = adc_sensor_val_conversion(&channel, adc_val, &sensor_val);
                 telemetry_publish_data(telem, channel.type, channel.sensor_id, time_ms, (void *)&sensor_val);
-                printf("Published ADC data\n");
             }
         }
 #endif
@@ -409,7 +408,8 @@ static void sensor_telemetry(telemetry_args_t *args, telemetry_sock_t *telem) {
             if (err < 0) {
                 fprintf(stderr, "Error fetching mass data: %d\n", err);
             } else {
-                telemetry_publish_data(telem, TELEM_MASS, 0, time_ms, (void *)&sensor_mass.data.force);
+                int32_t mass = sensor_mass.data.force;
+                telemetry_publish_data(telem, TELEM_MASS, 0, time_ms, (void *)&mass);
             }
         }
 #endif
@@ -445,6 +445,17 @@ void *telemetry_run(void *arg) {
         thread_return(err);
     }
     pthread_cleanup_push(telemetry_cancel_padstate_thread, &telemetry_padstate_thread);
+
+#ifndef DESKTOP_BUILD
+    /* Give the telemetry pad-state thread a higher priority TODO: make this constant between CONTROL and TELEM
+     * priorities */
+
+    err = pthread_setschedprio(telemetry_padstate_thread, 200);
+    if (err) {
+        fprintf(stderr, "Could not set controller thread priority: %s\n", strerror(err));
+        exit(EXIT_FAILURE);
+    }
+#endif
 
 #if defined(DESKTOP_BUILD) || defined(CONFIG_HYSIM_PAD_SERVER_MOCK_DATA)
     /* Start mock telemetry if on desktop build or if we want mock data during */
