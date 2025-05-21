@@ -182,30 +182,34 @@ static void random_data(telemetry_sock_t *telem) {
     for (;;) {
 
         pressure = (pressure + 1) % 255;
-        uint32_t pressure_i = 100 + pressure * 10;
+        uint32_t pressure_i = 100 + pressure * 10000;
+        telemetry_publish_data(telem, TELEM_PRESSURE, 0, time, &pressure_i);
+        pressure_i = 200 + pressure * 20000;
         telemetry_publish_data(telem, TELEM_PRESSURE, 1, time, &pressure_i);
-        pressure_i = 200 + pressure * 20;
+        pressure_i = 300 + pressure * 30000;
         telemetry_publish_data(telem, TELEM_PRESSURE, 2, time, &pressure_i);
-        pressure_i = 300 + pressure * 30;
+        pressure_i = 250 + pressure * 40000;
         telemetry_publish_data(telem, TELEM_PRESSURE, 3, time, &pressure_i);
-        pressure_i = 250 + pressure * 40;
+        pressure_i = 250 + pressure * 50000;
         telemetry_publish_data(telem, TELEM_PRESSURE, 4, time, &pressure_i);
+        pressure_i = 250 + pressure * 60000;
+        telemetry_publish_data(telem, TELEM_PRESSURE, 5, time, &pressure_i);
 
         temperature = (temperature + 78) % 20000 + 20000;
         int32_t temp_i = temperature - 1;
-        telemetry_publish_data(telem, TELEM_TEMP, 1, time, &temp_i);
+        telemetry_publish_data(telem, TELEM_TEMP, 0, time, &temp_i);
         temp_i = 2000 + temperature * 2;
-        telemetry_publish_data(telem, TELEM_TEMP, 2, time, &temp_i);
+        telemetry_publish_data(telem, TELEM_TEMP, 1, time, &temp_i);
         temp_i = 3000 + temperature * 3;
-        telemetry_publish_data(telem, TELEM_TEMP, 3, time, &temp_i);
+        telemetry_publish_data(telem, TELEM_TEMP, 2, time, &temp_i);
         temp_i = 2500 + temperature * 4;
-        telemetry_publish_data(telem, TELEM_TEMP, 4, time, &temp_i);
+        telemetry_publish_data(telem, TELEM_TEMP, 3, time, &temp_i);
 
         mass = (mass + 10) % 4000 + 3900;
         uint32_t mass_i = mass + 2;
-        telemetry_publish_data(telem, TELEM_MASS, 1, time, &mass_i);
+        telemetry_publish_data(telem, TELEM_MASS, 0, time, &mass_i);
         mass_i = mass + 4;
-        telemetry_publish_data(telem, TELEM_MASS, 2, time, &mass_i);
+        telemetry_publish_data(telem, TELEM_THRUST, 0, time, &mass_i);
 
         time = (time + 1) % 1000000;
         usleep(100000);
