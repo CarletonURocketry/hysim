@@ -102,6 +102,7 @@ static void telemetry_publish_data(telemetry_sock_t *sock, telem_subtype_e type,
     pressure_p pressure_body;
     mass_p mass_body;
     temp_p temperature_body;
+    thrust_p thrust_body;
     continuity_state_p continuity_body;
 
     struct iovec pkt[2] = {
@@ -121,7 +122,7 @@ static void telemetry_publish_data(telemetry_sock_t *sock, telem_subtype_e type,
     case TELEM_MASS:
         mass_body.id = id;
         mass_body.time = time;
-        mass_body.mass = deref(uint32_t, data);
+        mass_body.mass = deref(int32_t, data);
         pkt[1].iov_base = &mass_body;
         pkt[1].iov_len = sizeof(mass_body);
         break;
@@ -132,6 +133,14 @@ static void telemetry_publish_data(telemetry_sock_t *sock, telem_subtype_e type,
         temperature_body.temperature = deref(int32_t, data);
         pkt[1].iov_base = &temperature_body;
         pkt[1].iov_len = sizeof(temperature_body);
+        break;
+
+    case TELEM_THRUST:
+        thrust_body.id = id;
+        thrust_body.time = time;
+        thrust_body.thrust = deref(uint32_t, data);
+        pkt[1].iov_base = &thrust_body;
+        pkt[1].iov_len = sizeof(thrust_body);
         break;
 
     case TELEM_CONT:
@@ -340,7 +349,7 @@ static void sensor_telemetry(telemetry_args_t *args, telemetry_sock_t *telem) {
             .n_channels = 2,
             .channels =
                 {
-                    {.channel_num = 4, .sensor_id = 0, .type = TELEM_MASS},
+                    {.channel_num = 4, .sensor_id = 0, .type = TELEM_THRUST},
                     {.channel_num = 6, .sensor_id = 1, .type = TELEM_CONT},
                 },
         },
