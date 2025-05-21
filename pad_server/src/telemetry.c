@@ -405,8 +405,7 @@ static void sensor_telemetry(telemetry_args_t *args, telemetry_sock_t *telem) {
             if (err < 0) {
                 fprintf(stderr, "Error fetching mass data: %d\n", err);
             } else {
-                /* I made the id of this one 3, check on this*/
-                telemetry_publish_data(telem, TELEM_MASS, 3, time_ms, (void *)&sensor_mass.data.force);
+                telemetry_publish_data(telem, TELEM_MASS, 0, time_ms, (void *)&sensor_mass.data.force);
             }
         }
 #endif
