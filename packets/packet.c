@@ -56,6 +56,12 @@ void packet_mass_init(mass_p *p, uint8_t id, uint32_t time, int32_t mass) {
     p->mass = mass;
 }
 
+void packet_thrust_init(thrust_p *p, uint8_t id, uint32_t time, uint32_t thrust) {
+    p->id = id;
+    p->time = time;
+    p->thrust = thrust;
+}
+
 void packet_arm_state_init(arm_state_p *p, uint32_t time, arm_lvl_e state) {
     p->time = time;
     p->state = (uint8_t)state;
