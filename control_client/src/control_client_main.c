@@ -418,6 +418,7 @@ int main(int argc, char **argv) {
                 break;
             case EINVAL:
                 fprintf(stderr, "Invalid actuator/arming level.\n");
+                break;
             case ENODEV:
                 fprintf(stderr, "No such actuator/arming level exists\n");
                 break;
