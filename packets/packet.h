@@ -33,7 +33,7 @@ typedef enum {
     TELEM_TEMP = 0,     /* Temperature measurement */
     TELEM_PRESSURE = 1, /* Pressure measurement */
     TELEM_MASS = 2,     /* Mass measurement */
-    TELEM_THRUST = 3,
+    TELEM_THRUST = 3,   /* Thrust measurement */
     TELEM_ARM = 4,      /* Arming state */
     TELEM_ACT = 5,      /* Actuator state */
     TELEM_WARN = 6,     /* Warning message */
@@ -112,9 +112,9 @@ typedef struct {
 } PACKED mass_p;
 
 typedef struct {
-    uint32_t time; /* Time stamp in milliseconds since power on. */
-    uint32_t thrust; /* Thrust in newtons. */
-    uint8_t id; /* The ID of the sensor which reported the measurement. */
+    uint32_t time;   /* Time stamp in milliseconds since power on. */
+    uint32_t thrust; /* Thrust in Newtons. */
+    uint8_t id;      /* The ID of the sensor which reported the measurement. */
 } PACKED thrust_p;
 
 /* Arming state message */
