@@ -4,22 +4,54 @@
 #include <semaphore.h>
 #include <stdbool.h>
 #include <stdint.h>
-#include <stdio.h>
 
 #include "actuator.h"
 #include "gpio_actuator.h"
+#include "pwm_actuator.h"
 #include "state.h"
 #include <sys/ioctl.h>
 
-static const char *ACTUATOR_GPIO[NUM_ACTUATORS] = {
-    [ID_FIRE_VALVE] = "/dev/gpio27", [ID_XV1] = "/dev/gpio2",
-    [ID_XV2] = "/dev/gpio3",         [ID_XV3] = "/dev/gpio4",
-    [ID_XV4] = "/dev/gpio5",         [ID_XV5] = "/dev/gpio6",
-    [ID_XV6] = "/dev/gpio7",         [ID_XV7] = "/dev/gpio8",
-    [ID_XV8] = "/dev/gpio9",         [ID_XV9] = "/dev/gpio10",
-    [ID_XV10] = "/dev/gpio11",       [ID_XV11] = "/dev/gpio12",
-    [ID_XV12] = "/dev/gpio12",       [ID_QUICK_DISCONNECT] = "/dev/gpio26",
-    [ID_IGNITER] = "/dev/gpio28", // TODO double check?
+struct actuator_info {
+    uint8_t id;
+    bool gpio;
+    union {
+        char *dev;
+        pwm_actinfo_t pwm;
+    } priv;
+};
+
+static const struct actuator_info ACTUATORS[] = {
+    {.id = ID_XV1, .gpio = true, .priv = {.dev = "/dev/gpio2"}},
+    {.id = ID_XV2, .gpio = true, .priv = {.dev = "/dev/gpio3"}},
+    {.id = ID_XV3, .gpio = true, .priv = {.dev = "/dev/gpio4"}},
+    {.id = ID_XV4, .gpio = true, .priv = {.dev = "/dev/gpio5"}},
+    {.id = ID_XV5, .gpio = true, .priv = {.dev = "/dev/gpio6"}},
+    {.id = ID_XV6, .gpio = true, .priv = {.dev = "/dev/gpio7"}},
+    {.id = ID_XV7, .gpio = true, .priv = {.dev = "/dev/gpio8"}},
+    {.id = ID_XV8, .gpio = true, .priv = {.dev = "/dev/gpio9"}},
+    {.id = ID_XV9, .gpio = true, .priv = {.dev = "/dev/gpio10"}},
+    {.id = ID_XV10, .gpio = true, .priv = {.dev = "/dev/gpio11"}},
+    {.id = ID_XV11, .gpio = true, .priv = {.dev = "/dev/gpio12"}},
+    {.id = ID_XV12, .gpio = true, .priv = {.dev = "/dev/gpio13"}},
+    {.id = ID_IGNITER, .gpio = true, .priv = {.dev = "/dev/gpio28"}},
+    {.id = ID_DUMP,
+     .gpio = false,
+     .priv = {.pwm =
+                  {
+                      .dev = "/dev/pwm5",
+                      .channel = 1 /* B for RP2040 */,
+                      .close_duty = 0x2666,
+                      .open_duty = 0x8ccc,
+                  }}},
+    {.id = ID_QUICK_DISCONNECT,
+     .gpio = false,
+     .priv = {.pwm =
+                  {
+                      .dev = "/dev/pwm5",
+                      .channel = 0 /* A for RP2040 */,
+                      .close_duty = 0x2666,
+                      .open_duty = 0x8ccc,
+                  }}},
 };
 
 /*
@@ -31,8 +63,15 @@ void padstate_init(padstate_t *state) {
     pthread_rwlock_init(&state->rw_lock, NULL);
 
     state->arm_level = ARMED_PAD;
+
+    /* Initialize all actuators */
+
     for (unsigned int i = 0; i < NUM_ACTUATORS; i++) {
-        gpio_actuator_init(&state->actuators[i], i, ACTUATOR_GPIO[i]);
+        if (ACTUATORS[i].gpio) {
+            gpio_actuator_init(&state->actuators[ACTUATORS[i].id], ACTUATORS[i].id, ACTUATORS[i].priv.dev);
+        } else {
+            pwm_actuator_init(&state->actuators[ACTUATORS[i].id], ACTUATORS[i].id, &ACTUATORS[i].priv.pwm);
+        }
     }
 
     pthread_mutex_init(&state->update_mut, NULL);
@@ -153,12 +192,15 @@ int pad_actuate(padstate_t *state, uint8_t id, uint8_t req_state) {
     bool is_solenoid_valve;
     arm_lvl_e arm_lvl;
     int err;
+    /* Is the dump valve, which can always be actuated */
+
+    if (id == ID_DUMP) goto actuate_actuator;
 
     /* Invalid actuator ID */
 
     if (id >= NUM_ACTUATORS) return ACT_DNE;
 
-    is_solenoid_valve = id >= ID_XV1 && id <= ID_XV12;
+    is_solenoid_valve = (id >= ID_XV1 && id <= ID_XV12) && id != ID_FIRE_VALVE;
 
     /* Invalid state requested */
 
@@ -197,6 +239,8 @@ int pad_actuate(padstate_t *state, uint8_t id, uint8_t req_state) {
         // every command is available
         break;
     }
+
+actuate_actuator:
 
     /* For now just always actuate the actuator */
 

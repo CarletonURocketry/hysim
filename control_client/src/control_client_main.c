@@ -47,12 +47,11 @@ static switch_t switches[] = {
 
     /* Actuator switches */
 
-    {.act_id = ID_FIRE_VALVE, .state = false, .kind = CNTRL_ACT_REQ},
     {.act_id = ID_XV1, .state = false, .kind = CNTRL_ACT_REQ},
     {.act_id = ID_XV2, .state = false, .kind = CNTRL_ACT_REQ},
     {.act_id = ID_XV3, .state = false, .kind = CNTRL_ACT_REQ},
     {.act_id = ID_XV4, .state = false, .kind = CNTRL_ACT_REQ},
-    {.act_id = ID_XV5, .state = false, .kind = CNTRL_ACT_REQ},
+    {.act_id = ID_FIRE_VALVE, .state = false, .kind = CNTRL_ACT_REQ},
     {.act_id = ID_XV6, .state = false, .kind = CNTRL_ACT_REQ},
     {.act_id = ID_XV7, .state = false, .kind = CNTRL_ACT_REQ},
     {.act_id = ID_XV8, .state = false, .kind = CNTRL_ACT_REQ},
@@ -61,6 +60,7 @@ static switch_t switches[] = {
     {.act_id = ID_XV11, .state = false, .kind = CNTRL_ACT_REQ},
     {.act_id = ID_XV12, .state = false, .kind = CNTRL_ACT_REQ},
     {.act_id = ID_QUICK_DISCONNECT, .state = false, .kind = CNTRL_ACT_REQ},
+    {.act_id = ID_DUMP, .state = false, .kind = CNTRL_ACT_REQ},
     {.act_id = ID_IGNITER, .state = false, .kind = CNTRL_ACT_REQ},
 
     /* Arming level commands */
@@ -74,14 +74,14 @@ static switch_t switches[] = {
 
 #ifndef DESKTOP_BUILD
 static const char *ACTUATOR_IN[] = {
-    [ID_XV1] = "/dev/gpio2",         [ID_XV2] = "/dev/gpio3",
-    [ID_XV3] = "/dev/gpio4",         [ID_XV4] = "/dev/gpio5",
-    [ID_XV5] = "/dev/gpio6",         [ID_XV6] = "/dev/gpio7",
-    [ID_XV7] = "/dev/gpio8",         [ID_XV8] = "/dev/gpio9",
-    [ID_XV9] = "/dev/gpio10",        [ID_XV10] = "/dev/gpio11",
-    [ID_XV11] = "/dev/gpio12",       [ID_XV12] = "/dev/gpio13",
-    [ID_IGNITER] = "/dev/gpio28",    [ID_QUICK_DISCONNECT] = "/dev/gpio15",
-    [ID_FIRE_VALVE] = "/dev/gpio14",
+    [ID_XV1] = "/dev/gpio2",      [ID_XV2] = "/dev/gpio3",
+    [ID_XV3] = "/dev/gpio15",     [ID_XV4] = "/dev/gpio5",
+    [ID_XV5] = "/dev/gpio6",      [ID_XV6] = "/dev/gpio7",
+    [ID_XV7] = "/dev/gpio8",      [ID_XV8] = "/dev/gpio9",
+    [ID_XV9] = "/dev/gpio10",     [ID_XV10] = "/dev/gpio11",
+    [ID_XV11] = "/dev/gpio12",    [ID_XV12] = "/dev/gpio13",
+    [ID_IGNITER] = "/dev/gpio28", [ID_QUICK_DISCONNECT] = "/dev/gpio14",
+    [ID_DUMP] = "/dev/gpio4",
 };
 
 static const char *ARM_IN[] = {
@@ -291,7 +291,6 @@ int main(int argc, char **argv) {
 
         fd = open(gpio_dev, O_RDWR);
         if (fd < 0) {
-            syslog(LOG_ERR, "Couldn't open '%s': %d\n", gpio_dev, errno);
             fprintf(stderr, "Couldn't open '%s': %d\n", gpio_dev, errno);
             return EXIT_FAILURE;
         }
@@ -299,16 +298,13 @@ int main(int argc, char **argv) {
         /* Set up to receive signal */
 
         notify.sigev_value.sival_ptr = &switches[i];
-        syslog(LOG_INFO, "ioctl register call");
         err = ioctl(fd, GPIOC_REGISTER, (unsigned long)&notify);
         if (err < 0) {
-            syslog(LOG_ERR, "Failed to register interrupt for %s: %d\n", gpio_dev, errno);
             fprintf(stderr, "Failed to register interrupt for %s: %d\n", gpio_dev, errno);
             close(fd);
             return EXIT_FAILURE;
         }
 
-        syslog(LOG_INFO, "Closed device");
         close(fd);
     }
 #endif
@@ -418,6 +414,7 @@ int main(int argc, char **argv) {
                 break;
             case EINVAL:
                 fprintf(stderr, "Invalid actuator/arming level.\n");
+                break;
             case ENODEV:
                 fprintf(stderr, "No such actuator/arming level exists\n");
                 break;
