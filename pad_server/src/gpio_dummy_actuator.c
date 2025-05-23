@@ -1,5 +1,8 @@
+/* NOTE: used in desktop builds to mock GPIO actuators */
+
+#include <stdio.h>
+
 #include "gpio_actuator.h"
-#include "stdio.h"
 
 /*
  * Turn on a GPIO actuator.
@@ -7,7 +10,7 @@
  * @return 0 on success, an error code on failure.
  */
 static int gpio_actuator_on(actuator_t *act) {
-    printf("Dummy actuator #%d turned on\n", act->id);
+    printf("Dummy GPIO actuator #%d turned on\n", act->id);
     return 0;
 }
 
@@ -17,7 +20,7 @@ static int gpio_actuator_on(actuator_t *act) {
  * @return 0 on success, an error code on failure.
  */
 static int gpio_actuator_off(actuator_t *act) {
-    printf("Dummy actuator #%d turned off\n", act->id);
+    printf("Dummy GPIO actuator #%d turned off\n", act->id);
     return 0;
 }
 

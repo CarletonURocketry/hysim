@@ -5,12 +5,11 @@
 
 /* String names of the actuators. */
 static const char *ACTUATOR_STR[] = {
-    [ID_FIRE_VALVE] = "Fire valve",
     [ID_XV1] = "XV-1",
     [ID_XV2] = "XV-2",
     [ID_XV3] = "XV-3",
     [ID_XV4] = "XV-4",
-    [ID_XV5] = "XV-5",
+    [ID_FIRE_VALVE] = "XV-5 (Fire valve)", /* XV5 */
     [ID_XV6] = "XV-6",
     [ID_XV7] = "XV-7",
     [ID_XV8] = "XV-8",
@@ -20,6 +19,7 @@ static const char *ACTUATOR_STR[] = {
     [ID_XV12] = "XV-12",
     [ID_QUICK_DISCONNECT] = "Quick disconnect",
     [ID_IGNITER] = "Igniter",
+    [ID_DUMP] = "Dump valve",
 };
 
 /*

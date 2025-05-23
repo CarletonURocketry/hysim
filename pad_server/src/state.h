@@ -8,7 +8,13 @@
 #include <semaphore.h>
 #include <stdbool.h>
 
-/* Number of actuators in the system: 12 solenoid valves, 1 fire valve, 1 quick disconnect, 1 igniter */
+/* Number of actuators in the system:
+ * - 12 solenoid valves
+ * - 1 quick disconnect
+ * - 1 dump valve
+ * - 1 igniter
+ */
+
 #define NUM_ACTUATORS (12 + 1 + 1 + 1)
 
 /* State of the entire pad control system */

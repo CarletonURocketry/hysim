@@ -1,13 +1,15 @@
 /* WARNING: This file is expluded from Linux compilation because the of the missing NuttX header file */
 
-#include "gpio_actuator.h"
-#include "actuator.h"
-#include "stdio.h"
 #include <errno.h>
 #include <fcntl.h>
-#include <nuttx/ioexpander/gpio.h>
+#include <stdio.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
+
+#include <nuttx/ioexpander/gpio.h>
+
+#include "actuator.h"
+#include "gpio_actuator.h"
 
 /*
  * Turn on a GPIO actuator.
