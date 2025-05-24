@@ -1,6 +1,6 @@
 #include <math.h>
 
-#include "../../logging/logging.h"
+#include "../../debugging/logging.h"
 #include "sensors.h"
 
 /*

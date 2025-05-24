@@ -12,7 +12,8 @@
 #include <time.h>
 #include <unistd.h>
 
-#include "../../logging/logging.h"
+#include "../../debugging/logging.h"
+#include "../../debugging/nxassert.h"
 #include "sensors.h"
 #include "state.h"
 #include "telemetry.h"
@@ -35,11 +36,15 @@
  */
 static int telemetry_init(telemetry_sock_t *sock, uint16_t port, char *addr) {
 
+    assert(sock != NULL);
+    assert(addr != NULL);
+
     /* Initialize the socket connection. */
 
     sock->sock = socket(AF_INET, SOCK_DGRAM, 0);
     if (sock->sock < 0) {
         herr("Failed to create telemetry UDP socket\n");
+        nxfail("Failed to create telemetry UDP socket");
         return errno;
     }
 
@@ -299,6 +304,10 @@ static void mock_telemetry(telemetry_args_t *args, telemetry_sock_t *telem) {
  */
 static void sensor_telemetry(telemetry_args_t *args, telemetry_sock_t *telem) {
     int err;
+
+    assert(args != NULL);
+    assert(telem != NULL);
+
 #if defined(CONFIG_SENSORS_NAU7802)
     sensor_mass_t sensor_mass = {
         .known_mass_grams = SENSOR_MASS_KNOWN_WEIGHT,
@@ -434,6 +443,8 @@ void *telemetry_run(void *arg) {
     telemetry_args_t *args = (telemetry_args_t *)(arg);
     int err;
 
+    assert(arg != NULL);
+
     /* Start telemetry socket */
 
     telemetry_sock_t telem;
@@ -479,6 +490,7 @@ void *telemetry_run(void *arg) {
     sensor_telemetry(args, &telem);
 #endif
 
+    nxfail("Telemetry thread exited");
     thread_return(0); // Normal return
 
     pthread_cleanup_pop(1);
@@ -498,6 +510,9 @@ void telemetry_send_padstate(padstate_t *state, telemetry_sock_t *sock) {
         .msg_iov = pkt,
         .msg_iovlen = (sizeof(pkt) / sizeof(struct iovec)),
     };
+
+    assert(state != NULL);
+    assert(sock != NULL);
 
     /* Find the current time in milliseconds */
 
@@ -537,15 +552,19 @@ void telemetry_send_padstate(padstate_t *state, telemetry_sock_t *sock) {
  */
 void *telemetry_update_padstate(void *arg) {
     telemetry_padstate_args_t *args = (telemetry_padstate_args_t *)arg;
+    assert(arg != NULL);
+    assert(args->state != NULL);
     padstate_t *state = args->state;
+    int err = -1;
 
     for (;;) {
         struct timespec cond_timeout;
         clock_gettime(CLOCK_REALTIME, &cond_timeout);
         cond_timeout.tv_sec += PADSTATE_UPDATE_TIMEOUT_SEC;
 
-        int err = -1;
-        pthread_mutex_lock(&state->update_mut);
+        err = pthread_mutex_lock(&state->update_mut);
+        assert(err == 0);
+
         // waiting until either the cond times out or an update is received
         // and we confirmed it was not a spurious wakeup
         while (err != ETIMEDOUT && !state->update_recorded) {
@@ -560,8 +579,10 @@ void *telemetry_update_padstate(void *arg) {
 
         telemetry_send_padstate(state, args->sock);
         state->update_recorded = false;
-        pthread_mutex_unlock(&state->update_mut);
+        err = pthread_mutex_unlock(&state->update_mut);
+        assert(err == 0);
     }
 
+    nxfail("telemetry_update_padstate exited");
     thread_return(0);
 }

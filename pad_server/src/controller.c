@@ -7,7 +7,8 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-#include "../../logging/logging.h"
+#include "../../debugging/logging.h"
+#include "../../debugging/nxassert.h"
 #include "../../packets/packet.h"
 #include "controller.h"
 #include "state.h"
@@ -197,6 +198,8 @@ void *controller_run(void *arg) {
     controller.sock = -1;
     controller.client = -1;
 
+    assert(arg != NULL);
+
     pthread_cleanup_push(controller_cleanup, &controller);
 
     int err;
@@ -204,6 +207,7 @@ void *controller_run(void *arg) {
     err = controller_init(&controller, args->port);
     if (err) {
         herr("Could not initialize controller with error: %s\n", strerror(err));
+        nxfail("Could not initialize controller");
         exit(EXIT_FAILURE);
     }
 
@@ -352,6 +356,7 @@ void *controller_run(void *arg) {
         }
     }
 
+    nxfail("Reached the end of control thread");
     thread_return(0); // Normal return
     pthread_cleanup_pop(1);
 }

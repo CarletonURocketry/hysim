@@ -11,7 +11,8 @@
 #include <time.h>
 #include <unistd.h>
 
-#include "../../logging/logging.h"
+#include "../../debugging/logging.h"
+#include "../../debugging/nxassert.h"
 #include "actuator.h"
 #include "controller.h"
 #include "helptext/helptext.h"
@@ -265,6 +266,7 @@ int main(int argc, char **argv) {
     err = pthread_join(controller_thread, NULL);
     if (err) {
         herr("Controller thread exited with error: %s\n", strerror(err));
+        nxfail("controller thread exited!");
     }
 
     hinfo("Joined on control thread\n");
@@ -274,9 +276,11 @@ int main(int argc, char **argv) {
     err = pthread_join(telem_thread, NULL);
     if (err) {
         herr("Telemetry thread exited with error: %s\n", strerror(err));
+        nxfail("telemetry thread exited!");
     }
 
     hinfo("Joined on telemetry thread\n");
 
+    nxfail("main() exited!");
     return EXIT_SUCCESS;
 }

@@ -6,7 +6,7 @@
 #include <stdint.h>
 #include <sys/ioctl.h>
 
-#include "../../logging/logging.h"
+#include "../../debugging/logging.h"
 #include "actuator.h"
 #include "gpio_actuator.h"
 #include "pwm_actuator.h"

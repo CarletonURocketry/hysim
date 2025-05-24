@@ -2,7 +2,7 @@
 #include <stdatomic.h>
 #include <stdint.h>
 
-#include "../../logging/logging.h"
+#include "../../debugging/logging.h"
 #include "state.h"
 
 /* String names of the actuators. */
