@@ -199,10 +199,6 @@ int pad_actuate(padstate_t *state, uint8_t id, uint8_t req_state) {
     int err;
     actuator_t *act;
 
-    /* Actuator is the dump valve, which can always be actuated */
-
-    if (id == ID_DUMP) goto actuate_actuator;
-
     /* Invalid actuator ID */
 
     if (id >= NUM_ACTUATORS) {
@@ -210,6 +206,10 @@ int pad_actuate(padstate_t *state, uint8_t id, uint8_t req_state) {
         return ACT_DNE;
     }
     act = &state->actuators[id];
+
+    /* Actuator is the dump valve, which can always be actuated */
+
+    if (id == ID_DUMP) goto actuate_actuator;
 
     is_solenoid_valve = (id >= ID_XV1 && id <= ID_XV12) && id != ID_FIRE_VALVE;
 
