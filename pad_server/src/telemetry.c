@@ -317,28 +317,30 @@ static void sensor_telemetry(telemetry_args_t *args, telemetry_sock_t *telem) {
                     bodies[sensor_count].pressure = (pressure_p){.time = time_ms, .id = i, .pressure = sensor_val};
                     pkt[sensor_count * 2 + 1] =
                         (struct iovec){.iov_base = &bodies[sensor_count].pressure, .iov_len = sizeof(pressure_p)};
+                    sensor_count++;
                     break;
                 case TELEM_TEMP:
                     bodies[sensor_count].temp = (temp_p){.time = time_ms, .id = i, .temperature = sensor_val};
                     pkt[sensor_count * 2 + 1] =
                         (struct iovec){.iov_base = &bodies[sensor_count].temp, .iov_len = sizeof(temp_p)};
+                    sensor_count++;
                     break;
                 case TELEM_THRUST:
                     bodies[sensor_count].thrust = (thrust_p){.time = time_ms, .id = i, .thrust = sensor_val};
                     pkt[sensor_count * 2 + 1] =
                         (struct iovec){.iov_base = &bodies[sensor_count].thrust, .iov_len = sizeof(thrust_p)};
+                    sensor_count++;
                     break;
                 case TELEM_CONT:
                     bodies[sensor_count].continuity = (continuity_state_p){.time = time_ms, .state = sensor_val};
                     pkt[sensor_count * 2 + 1] = (struct iovec){.iov_base = &bodies[sensor_count].continuity,
                                                                .iov_len = sizeof(continuity_state_p)};
+                    sensor_count++;
                     break;
                 default:
-                    fprintf(stderr, "Invalid telemetry data type: %u\n", channel.type);
+                    herr("Invalid telemetry data type: %u\n", channel.type);
                     break;
                 }
-
-                sensor_count++;
             }
         }
 #endif
@@ -346,7 +348,9 @@ static void sensor_telemetry(telemetry_args_t *args, telemetry_sock_t *telem) {
 #if defined(CONFIG_SENSORS_NAU7802)
         if (sensor_mass.available) {
             err = sensor_mass_fetch(&sensor_mass);
-            if (err == 0) {
+            if (err < 0) {
+                herr("Error fetching mass data: %d\n", err);
+            } else {
                 headers[sensor_count] = (header_p){.type = TYPE_TELEM, .subtype = TELEM_MASS};
                 bodies[sensor_count].mass = (mass_p){.time = time_ms, .id = 0, .mass = sensor_mass.data.force};
 
@@ -367,7 +371,7 @@ static void sensor_telemetry(telemetry_args_t *args, telemetry_sock_t *telem) {
             };
             telemetry_publish(telem, &msg);
         } else {
-            fprintf(stderr, "No sensor data to send\n");
+            herr("No sensor data to send\n");
             usleep(1000000);
         }
     }
