@@ -26,5 +26,32 @@ config HYSIM_PAD_SERVER_MOCK_DATA
         bool "Use mock data instead of real sensors"
         default n
 
+config HYSIM_PAD_SERVER_DEBUG
+		bool "Debug logging"
+		default n
+		---help---
+			Enables debug logging options for the pad server
+
+if HYSIM_PAD_SERVER_DEBUG
+
+config HYSIM_PAD_SERVER_LOG_ERR
+		bool "Debug error logging"
+		default n
+		---help---
+			Enables error log output
+
+config HYSIM_PAD_SERVER_LOG_WARN
+		bool "Debug warning logging"
+		default n
+		---help---
+			Enables error log output
+
+config HYSIM_PAD_SERVER_LOG_WARN
+		bool "Debug info logging"
+		default n
+		---help---
+			Enables info log output
+
 endif
 
+endif
