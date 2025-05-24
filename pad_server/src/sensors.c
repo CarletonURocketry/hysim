@@ -1,5 +1,7 @@
-#include "sensors.h"
 #include <math.h>
+
+#include "../../debugging/logging.h"
+#include "sensors.h"
 
 /*
  * Maps a value in the input range to the output range.
@@ -32,10 +34,9 @@ int adc_trigger_conversion(adc_device_t *adc) { return ioctl(adc->fd, ANIOC_TRIG
 int adc_read_value(adc_device_t *adc) {
     ssize_t nbytes = read(adc->fd, adc->sample, sizeof(adc->sample));
     if (nbytes < 0) {
-        fprintf(stderr, "Failed to read ADC value\n");
+        herr("Failed to read ADC value\n");
         return nbytes;
     } else if (nbytes == 0) {
-        printf("No data read from ADC\n");
         return -1;
     }
     return OK;
@@ -130,22 +131,31 @@ int adc_sensor_val_conversion(adc_channel_t *channel, int32_t adc_val, int32_t *
     /* 6.144 is the FSR of the ADC at PGA value 0 */
 
     double sensor_voltage = ((double)adc_val * 6.144) / (32768.0);
+    hinfo("Sensor voltage: %.2fV\n", sensor_voltage);
 
     switch (channel->type) {
 
     case TELEM_PRESSURE: {
         double val_max;
         if (channel->sensor_id == 4 || channel->sensor_id == 5) {
-            val_max = 1000.0;
-        } else {
             val_max = 2500.0;
+        } else {
+            val_max = 1000.0;
         }
-        *output_val = map_value(sensor_voltage, 1.0, 5.0, 0.0, val_max);
+
+        if (sensor_voltage < 1.0) {
+            *output_val = 0;
+            break;
+        }
+
+        *output_val = 1000 * map_value(sensor_voltage, 1.0, 5.0, 0.0, val_max);
+        hinfo("Pressure: %d mPSI\n", *output_val);
     } break;
 
     case TELEM_MASS: {
-        /* 0 - 2,500lbs according to Antoine */
-        *output_val = map_value(sensor_voltage, 0.0, 5.0, 0.0, 2500.0);
+        /* 0 - 2,500lbs according to Antoine, using values in Newtons */
+        *output_val = map_value(sensor_voltage, 0, 5.0, 0.0, 11120.5);
+        hinfo("Mass: %d N\n", *output_val);
     } break;
 
     case TELEM_CONT: {
@@ -154,6 +164,7 @@ int adc_sensor_val_conversion(adc_channel_t *channel, int32_t adc_val, int32_t *
         } else {
             *output_val = 1;
         }
+        hinfo("Continuity: '%s'\n", *output_val ? "continuous" : "open circuit");
     } break;
 
     case TELEM_TEMP: {
@@ -185,6 +196,7 @@ int adc_sensor_val_conversion(adc_channel_t *channel, int32_t adc_val, int32_t *
         } else {
             *output_val = 0;
         }
+        hinfo("Temperature: %d mC\n", *output_val);
     } break;
     }
     return 0;

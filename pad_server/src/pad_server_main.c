@@ -11,6 +11,8 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "../../debugging/logging.h"
+#include "../../debugging/nxassert.h"
 #include "actuator.h"
 #include "controller.h"
 #include "helptext/helptext.h"
@@ -159,11 +161,12 @@ int main(int argc, char **argv) {
     if (usb_init()) {
         return EXIT_FAILURE;
     }
-    printf("Starting controller...\n");
+    hinfo("USB shell started\n");
 #endif
 
 #if defined(CONFIG_NSH_NETINIT) && !defined(CONFIG_SYSTEM_NSH)
     netinit_bringup();
+    hinfo("Network infrastructure intitialized\n");
 #endif
 
     /* Parse command line options. */
@@ -205,38 +208,52 @@ int main(int argc, char **argv) {
     }
 
     /* Set up the state to be shared */
+
     padstate_init(&state);
+    hinfo("Initialized the padstate\n");
 
     /* Start controller thread */
+
     err = pthread_create(&controller_thread, NULL, controller_run, &controller_args);
     if (err) {
-        fprintf(stderr, "Could not start controller thread: %s\n", strerror(err));
+        herr("Could not start controller thread: %s\n", strerror(err));
         exit(EXIT_FAILURE);
     }
+
+    hinfo("Controller thread started.\n");
 
 #ifndef DESKTOP_BUILD
     /* Give the controller thread a higher priority to guarantee it will run before the telemetry thread */
+
     err = pthread_setschedprio(controller_thread, CONTROL_THREAD_PRIORITY);
     if (err) {
-        fprintf(stderr, "Could not set controller thread priority: %s\n", strerror(err));
+        herr("Could not set controller thread priority: %s\n", strerror(err));
         exit(EXIT_FAILURE);
     }
+
+    hinfo("Controller thread priority set to %u.\n", CONTROL_THREAD_PRIORITY);
 #endif
 
     /* Start telemetry thread */
+
     err = pthread_create(&telem_thread, NULL, telemetry_run, &telemetry_args);
     if (err) {
-        fprintf(stderr, "Could not start telemetry thread: %s\n", strerror(err));
+        herr("Could not start telemetry thread: %s\n", strerror(err));
         exit(EXIT_FAILURE);
     }
 
+    hinfo("Telemetry thread started\n");
+
 #ifndef DESKTOP_BUILD
     /* Give the telemetry thread a lower priority */
+
     err = pthread_setschedprio(telem_thread, TELEM_THREAD_PRIORITY);
     if (err) {
-        fprintf(stderr, "Could not set controller thread priority: %s\n", strerror(err));
+        herr("Could not set controller thread priority: %s\n", strerror(err));
         exit(EXIT_FAILURE);
     }
+
+    hinfo("Telemetry thread priority set to %u\n", TELEM_THREAD_PRIORITY);
 #endif
 
 #ifdef DESKTOP_BUILD
@@ -245,16 +262,25 @@ int main(int argc, char **argv) {
 #endif
 
     /* Wait for control thread to end */
+
     err = pthread_join(controller_thread, NULL);
     if (err) {
-        fprintf(stderr, "Controller thread exited with error: %s\n", strerror(err));
+        herr("Controller thread exited with error: %s\n", strerror(err));
+        nxfail("controller thread exited!");
     }
+
+    hinfo("Joined on control thread\n");
 
     /* Wait for telemetry thread to end */
+
     err = pthread_join(telem_thread, NULL);
     if (err) {
-        fprintf(stderr, "Telemetry thread exited with error: %s\n", strerror(err));
+        herr("Telemetry thread exited with error: %s\n", strerror(err));
+        nxfail("telemetry thread exited!");
     }
 
+    hinfo("Joined on telemetry thread\n");
+
+    nxfail("main() exited!");
     return EXIT_SUCCESS;
 }

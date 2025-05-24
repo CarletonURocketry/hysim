@@ -34,6 +34,4 @@ int padstate_signal_update(padstate_t *state);
 int padstate_change_level(padstate_t *state, arm_lvl_e new_arm);
 int pad_actuate(padstate_t *state, uint8_t id, uint8_t req_state);
 
-const char *actuator_name(uint8_t id);
-
 #endif // _STATE_H_
