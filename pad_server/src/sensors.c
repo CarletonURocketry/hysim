@@ -58,7 +58,11 @@ int sensor_mass_fetch(sensor_mass_t *sensor_mass) {
         return err;
     }
 
-    return orb_copy(sensor_mass->imu_meta, sensor_mass->imu, &(sensor_mass->data));
+    if (update) {
+        return orb_copy(sensor_mass->imu_meta, sensor_mass->imu, &(sensor_mass->data));
+    }
+
+    return -1;
 }
 
 /* A function to initialize the mass sensor with UORB
