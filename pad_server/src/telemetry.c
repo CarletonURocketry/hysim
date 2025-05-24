@@ -481,42 +481,43 @@ void *telemetry_run(void *arg) {
  */
 void telemetry_send_padstate(padstate_t *state, telemetry_sock_t *sock) {
     struct timespec time;
-    header_p hdr;
-    struct iovec pkt[2];
+    clock_gettime(CLOCK_MONOTONIC, &time);
+    uint32_t time_ms = time.tv_sec * 1000 + time.tv_nsec / 1000000;
+
+    struct iovec pkt[(1 + NUM_ACTUATORS) * 2];
+
     struct msghdr msg = {
         .msg_iov = pkt,
         .msg_iovlen = (sizeof(pkt) / sizeof(struct iovec)),
     };
 
-    /* Find the current time in milliseconds */
-
-    clock_gettime(CLOCK_MONOTONIC, &time);
-    uint32_t time_ms = time.tv_sec * 1000 + time.tv_nsec / 1000000;
-
     /* Send arming update */
 
     arm_lvl_e arm_lvl = padstate_get_level(state);
     arm_state_p arm_body = {.time = time_ms, .state = arm_lvl};
-    hdr = (header_p){.type = TYPE_TELEM, .subtype = TELEM_ARM};
+    header_p arm_hdr = (header_p){.type = TYPE_TELEM, .subtype = TELEM_ARM};
 
-    pkt[0] = (struct iovec){.iov_base = &hdr, .iov_len = sizeof(hdr)};
+    pkt[0] = (struct iovec){.iov_base = &arm_hdr, .iov_len = sizeof(arm_hdr)};
     pkt[1] = (struct iovec){.iov_base = &arm_body, .iov_len = sizeof(arm_body)};
-
-    telemetry_publish(sock, &msg);
 
     /* Send actuator updates */
 
+    header_p headers[NUM_ACTUATORS];
+    act_state_p bodies[NUM_ACTUATORS];
+
     for (int i = 0; i < NUM_ACTUATORS; i++) {
-        hdr = (header_p){.type = TYPE_TELEM, .subtype = TELEM_ACT};
+        // Store the data in the arrays
+        headers[i] = (header_p){.type = TYPE_TELEM, .subtype = TELEM_ACT};
         bool act_state;
         padstate_get_actstate(state, i, &act_state);
-        act_state_p act_body = {.time = time_ms, .id = i, .state = act_state};
+        bodies[i] = (act_state_p){.time = time_ms, .id = i, .state = act_state};
 
-        pkt[0] = (struct iovec){.iov_base = &hdr, .iov_len = sizeof(hdr)};
-        pkt[1] = (struct iovec){.iov_base = &act_body, .iov_len = sizeof(act_body)};
-
-        telemetry_publish(sock, &msg);
+        // Point to the stored data
+        pkt[(1 + i) * 2] = (struct iovec){.iov_base = &headers[i], .iov_len = sizeof(header_p)};
+        pkt[(1 + i) * 2 + 1] = (struct iovec){.iov_base = &bodies[i], .iov_len = sizeof(act_state_p)};
     }
+
+    telemetry_publish(sock, &msg);
 }
 
 /*
