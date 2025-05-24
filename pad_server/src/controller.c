@@ -7,6 +7,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+#include "../../logging/logging.h"
 #include "../../packets/packet.h"
 #include "controller.h"
 #include "state.h"
@@ -38,6 +39,7 @@ static int controller_init(controller_t *controller, uint16_t port) {
     int opt = 1;
     err = setsockopt(controller->sock, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
     if (err < 0) {
+        herr("Failed to set option SO_REUSEADDR: %d\n", errno);
         return errno;
     }
 
@@ -50,6 +52,7 @@ static int controller_init(controller_t *controller, uint16_t port) {
     controller->client = -1;
 
     if (bind(controller->sock, (struct sockaddr *)&controller->addr, sizeof(controller->addr)) < 0) {
+        herr("Failed to bind\n");
         return errno;
     }
 
@@ -57,22 +60,36 @@ static int controller_init(controller_t *controller, uint16_t port) {
 
     int keepalive = 1;
     err = setsockopt(controller->sock, SOL_SOCKET, SO_KEEPALIVE, (void *)&keepalive, sizeof(keepalive));
-    if (err < 0) return errno;
+    if (err < 0) {
+        herr("Failed to set socket as keep-alive: %d.\n", errno);
+        return errno;
+    }
 
     /* Each interval between ACK probes is `int_secs` long */
+
     int int_secs = KEEPALIVE_INTERVAL_SECS;
     err = setsockopt(controller->sock, IPPROTO_TCP, TCP_KEEPINTVL, &int_secs, sizeof(int));
-    if (err < 0) return errno;
+    if (err < 0) {
+        herr("Failed to set keep-alive interval to %d: %d.\n", int_secs, errno);
+        return errno;
+    }
 
 #ifndef __APPLE__
     /* Idle `int_secs` before starting to probe with keep-alive ACKS */
+
     err = setsockopt(controller->sock, IPPROTO_TCP, TCP_KEEPIDLE, &int_secs, sizeof(int));
-    if (err < 0) return errno;
+    if (err < 0) {
+        herr("Failed to set keep-alive interval to %d: %d.\n", int_secs, errno);
+        return errno;
+    }
 #endif
 
     int count = KEEPALIVE_N_PROBES; /* Gives 10 probes (10 * `int_secs` seconds) to regain connection */
     err = setsockopt(controller->sock, IPPROTO_TCP, TCP_KEEPCNT, &count, sizeof(int));
-    if (err < 0) return errno;
+    if (err < 0) {
+        herr("Failed to set keep-alive probe count to %d: %d.\n", count, errno);
+        return errno;
+    }
 
     return 0;
 }
@@ -83,8 +100,11 @@ static int controller_init(controller_t *controller, uint16_t port) {
  * @return 0 for success, or the error that occurred.
  */
 static int controller_accept(controller_t *controller) {
+
     /* Listen for a controller client connection */
+
     if (listen(controller->sock, MAX_CONTROLLERS) < 0) {
+        herr("listen failed: %d\n", errno);
         return errno;
     }
 
@@ -92,6 +112,7 @@ static int controller_accept(controller_t *controller) {
     socklen_t addrlen = sizeof(controller->addr);
     controller->client = accept(controller->sock, (struct sockaddr *)&controller->addr, &addrlen);
     if (controller->client < 0) {
+        herr("accept failed: %d\n", errno);
         return errno;
     }
 
@@ -104,9 +125,12 @@ static int controller_accept(controller_t *controller) {
  * @return 0 for success, the error that occurred otherwise.
  */
 static int controller_sock_disconnect(controller_t *controller) {
-    // only close the connection if it is valid
+
+    /* Only close the connection if it is valid */
+
     if (controller->sock >= 0) {
         if (close(controller->sock) < 0) {
+            herr("close failed: %d\n", errno);
             return errno;
         }
         controller->sock = -1;
@@ -120,9 +144,11 @@ static int controller_sock_disconnect(controller_t *controller) {
  * @return 0 for success, the error that occurred otherwise.
  */
 static int controller_client_disconnect(controller_t *controller) {
-    // only close the connection if it is valid
+    /* Only close the connection if it is valid */
+
     if (controller->client >= 0) {
         if (close(controller->client) < 0) {
+            herr("close failed: %d\n", errno);
             return errno;
         }
         controller->client = -1;
@@ -177,16 +203,19 @@ void *controller_run(void *arg) {
     /* Initialize the controller (creates a new socket) */
     err = controller_init(&controller, args->port);
     if (err) {
-        fprintf(stderr, "Could not initialize controller with error: %s\n", strerror(err));
+        herr("Could not initialize controller with error: %s\n", strerror(err));
         exit(EXIT_FAILURE);
     }
 
     for (;;) {
-        fprintf(stderr, "Waiting for controller...\n");
+
         /* Initialize the controller (creates a new socket) */
+
+        printf("Waiting for controller...\n");
+
         err = controller_accept(&controller);
         if (err) {
-            fprintf(stderr, "Could not accept controller connection with error: %s\n", strerror(err));
+            herr("Could not accept controller connection with error: %s\n", strerror(err));
             controller_client_disconnect(&controller);
             continue;
         }
@@ -198,6 +227,7 @@ void *controller_run(void *arg) {
         for (;;) {
 
             /* Get the message header to determine what to handle */
+
             header_p hdr;
             ssize_t bread = 0;
             size_t total_read = 0;
@@ -205,16 +235,16 @@ void *controller_run(void *arg) {
             while (total_read < sizeof(hdr)) {
                 bread = controller_recv(&controller, (char *)&hdr + total_read, sizeof(hdr) - total_read);
                 if (bread == -1) {
-                    fprintf(stderr, "Error reading message header: %s\n", strerror(errno));
+                    hinfo("Error reading message header: %s\n", strerror(errno));
 
                     if (errno == ECONNRESET) {
                         // TODO: this should trigger an abort because it happens when TCP keep-alive is done
-                        fprintf(stderr, "Lost connection! ABORT!\n");
+                        herr("Lost connection! ABORT!\n");
                     }
 
                     break;
                 } else if (bread == 0) {
-                    fprintf(stderr, "Control box disconnected.\n");
+                    herr("Control box disconnected.\n");
                     break;
                 }
                 total_read += bread;
@@ -223,6 +253,7 @@ void *controller_run(void *arg) {
             /* Error happened, do a cleanup and re-initialize connection */
 
             if (bread <= 0) {
+                hinfo("Re-initializing connection.\n");
                 controller_client_disconnect(&controller);
                 break;
             }
@@ -236,36 +267,36 @@ void *controller_run(void *arg) {
                 case CNTRL_ACT_ACK:
                     /* Deliberate fall-through */
                 case CNTRL_ARM_ACK:
-                    fprintf(stderr, "Unexpectedly received acknowledgement from sender.\n");
+                    herr("Unexpectedly received acknowledgement from sender.\n");
                     break;
 
                 case CNTRL_ACT_REQ: {
                     act_req_p req;
 
                     controller_recv(&controller, &req, sizeof(req)); // TODO: handle recv errors
-                    printf("Received actuator request for ID #%u and state %s.\n", req.id, req.state ? "on" : "off");
+
+                    hinfo("Received actuator request for ID #%u and state %s.\n", req.id, req.state ? "on" : "off");
 
                     err = pad_actuate(args->state, req.id, req.state);
                     if (err == -1) {
-                        fprintf(stderr, "Could not modify the actuator with error: %s\n", strerror(errno));
+                        herr("Could not modify the actuator with error: %s\n", strerror(errno));
                         break;
                     } else {
                         switch (err) {
                         case ACT_OK:
-                            fprintf(stderr, "Actuator with id %d was put in state %d\n", req.id, req.state);
+                            hinfo("Actuator with id %d was put in state %d\n", req.id, req.state);
                             break;
 
                         case ACT_DNE:
-                            fprintf(stderr, "%d is not a valid actuator id\n", req.id);
+                            hwarn("%d is not a valid actuator id\n", req.id);
                             break;
 
                         case ACT_INV:
-                            fprintf(stderr, "%d is not a valid state for actuator with id %d\n", req.state, req.id);
+                            hwarn("%d is not a valid state for actuator with id %d\n", req.state, req.id);
                             break;
 
                         case ACT_DENIED:
-                            fprintf(stderr, "The current arming level is too low to operate actuator with id %d\n",
-                                    req.id);
+                            hwarn("The current arming level is too low to operate actuator with id %d\n", req.id);
                             break;
                         }
 
@@ -278,24 +309,25 @@ void *controller_run(void *arg) {
                 case CNTRL_ARM_REQ: {
                     arm_req_p req;
                     controller_recv(&controller, &req, sizeof(req)); // TODO: handle recv errors
-                    printf("Received arming state %u.\n", req.level);
+
+                    hinfo("Received arming state %u.\n", req.level);
 
                     err = padstate_change_level(args->state, req.level);
                     arm_ack_p ack;
 
                     switch (err) {
                     case ARM_OK:
-                        fprintf(stderr, "Arming level changed succesfully to %d\n", req.level);
+                        hinfo("Arming level changed succesfully to %d\n", req.level);
                         ack.status = ARM_OK;
                         controller_send(&controller, &ack, sizeof(ack));
                         break;
                     case ARM_DENIED:
-                        fprintf(stderr, "Could not change arming level with error: %d, arming denied\n", err);
+                        hwarn("Could not change arming level with error: %d, arming denied\n", err);
                         ack.status = ARM_DENIED;
                         controller_send(&controller, &ack, sizeof(ack));
                         break;
                     case ARM_INV:
-                        fprintf(stderr, "Could not change arming level with error: %d, arming invalid\n", err);
+                        hwarn("Could not change arming level with error: %d, arming invalid\n", err);
                         ack.status = ARM_INV;
                         controller_send(&controller, &ack, sizeof(ack));
                         break;
@@ -304,17 +336,17 @@ void *controller_run(void *arg) {
                 } break;
 
                 default:
-                    fprintf(stderr, "Invalid control message type: %u\n", hdr.subtype);
+                    herr("Invalid control message type: %u\n", hdr.subtype);
                     break;
                 }
                 break;
 
             case TYPE_TELEM:
-                fprintf(stderr, "Unexpectedly received telemetry packet.\n");
+                herr("Unexpectedly received telemetry packet.\n");
                 break;
 
             default:
-                fprintf(stderr, "Invalid message type: %u\n", hdr.type);
+                herr("Invalid message type: %u\n", hdr.type);
                 break;
             }
         }

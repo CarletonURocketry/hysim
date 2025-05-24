@@ -47,6 +47,6 @@ int actuator_on(actuator_t *act);
 int actuator_off(actuator_t *act);
 void actuator_init(actuator_t *act, uint8_t id, actuate_f on, actuate_f off, void *priv);
 int actuator_set(actuator_t *act, bool new_state);
-// const char *actuator_name(actuator_t *act); Conflicts with state.h, commenting for now. - Tony
+const char *actuator_get_name(actuator_t *act);
 
 #endif // _ACTUATOR_H_

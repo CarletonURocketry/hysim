@@ -12,6 +12,7 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "../../logging/logging.h"
 #include "sensors.h"
 #include "state.h"
 #include "telemetry.h"
@@ -35,10 +36,15 @@
 static int telemetry_init(telemetry_sock_t *sock, uint16_t port, char *addr) {
 
     /* Initialize the socket connection. */
+
     sock->sock = socket(AF_INET, SOCK_DGRAM, 0);
-    if (sock->sock < 0) return errno;
+    if (sock->sock < 0) {
+        herr("Failed to create telemetry UDP socket\n");
+        return errno;
+    }
 
     /* Create address */
+
     sock->addr.sin_family = AF_INET;
     sock->addr.sin_addr.s_addr = inet_addr(addr);
     sock->addr.sin_port = htons(port);
@@ -53,6 +59,7 @@ static int telemetry_init(telemetry_sock_t *sock, uint16_t port, char *addr) {
  */
 static int telemetry_close(telemetry_sock_t *sock) {
     if (close(sock->sock) < 0) {
+        herr("Failed to close telemetry socket\n");
         return errno;
     }
     return 0;
@@ -81,10 +88,9 @@ static void telemetry_cleanup(void *arg) { telemetry_close((telemetry_sock_t *)(
 
 static void telemetry_cancel_padstate_thread(void *arg) {
     pthread_t telemetry_padstate_thread = *(pthread_t *)arg;
-
     pthread_cancel(telemetry_padstate_thread);
     pthread_join(telemetry_padstate_thread, NULL);
-    fprintf(stderr, "Telemetry pad state thread terminated\n");
+    herr("Telemetry pad state thread terminated\n");
 }
 
 /*
@@ -97,7 +103,6 @@ static void telemetry_cancel_padstate_thread(void *arg) {
  */
 static void telemetry_publish_data(telemetry_sock_t *sock, telem_subtype_e type, uint8_t id, uint32_t time,
                                    void *data) {
-
     header_p hdr = {.type = TYPE_TELEM, .subtype = type};
     pressure_p pressure_body;
     mass_p mass_body;
@@ -151,7 +156,7 @@ static void telemetry_publish_data(telemetry_sock_t *sock, telem_subtype_e type,
         break;
 
     default:
-        fprintf(stderr, "Invalid telemetry data type: %u\n", type);
+        herr("Invalid telemetry data type: %u\n", type);
         return;
     }
 
@@ -303,17 +308,19 @@ static void sensor_telemetry(telemetry_args_t *args, telemetry_sock_t *telem) {
 
     err = sensor_mass_init(&sensor_mass);
     if (err < 0) {
-        fprintf(stderr, "Could not initialize mass sensor: %d\n", err);
+        herr("Could not initialize mass sensor: %d\n", err);
         sensor_mass.available = false;
     }
 
     if (sensor_mass.available) {
         err = sensor_mass_calibrate(&sensor_mass);
         if (err < 0) {
-            fprintf(stderr, "Could not calibrate mass sensor: %d\n", err);
+            herr("Could not calibrate mass sensor: %d\n", err);
             sensor_mass.available = false;
         }
     }
+
+    hinfo("NAU7802 mass sensor inititialized.\n");
 #endif
 
 #if defined(CONFIG_ADC_ADS1115)
@@ -364,8 +371,10 @@ static void sensor_telemetry(telemetry_args_t *args, telemetry_sock_t *telem) {
     for (int i = 0; i < arr_len(adc_devices); i++) {
         adc_devices[i].fd = open(adc_devices[i].devpath, O_RDONLY);
         if (adc_devices[i].fd < 0) {
-            fprintf(stderr, "Could not open ADC device %s: %s\n", adc_devices[i].devpath, strerror(errno));
+            herr("Could not open ADC device %s: %s\n", adc_devices[i].devpath, strerror(errno));
         }
+
+        hinfo("Initialized ADC device %s\n", adc_devices[i].devpath);
     }
 #endif
 
@@ -383,7 +392,7 @@ static void sensor_telemetry(telemetry_args_t *args, telemetry_sock_t *telem) {
 
             err = adc_trigger_conversion(&adc_devices[i]);
             if (err < 0) {
-                fprintf(stderr, "Failed to trigger ADC conversion on id %d: %d\n", adc_devices[i].id, err);
+                herr("Failed to trigger ADC conversion on id %d: %d\n", adc_devices[i].id, err);
                 continue;
             }
 
@@ -406,7 +415,7 @@ static void sensor_telemetry(telemetry_args_t *args, telemetry_sock_t *telem) {
         if (sensor_mass.available) {
             err = sensor_mass_fetch(&sensor_mass);
             if (err < 0) {
-                fprintf(stderr, "Error fetching mass data: %d\n", err);
+                herr("Error fetching mass data: %d\n", err);
             } else {
                 int32_t mass = sensor_mass.data.force;
                 telemetry_publish_data(telem, TELEM_MASS, 0, time_ms, (void *)&mass);
@@ -430,7 +439,7 @@ void *telemetry_run(void *arg) {
     telemetry_sock_t telem;
     err = telemetry_init(&telem, args->port, args->addr);
     if (err) {
-        fprintf(stderr, "Could not start telemetry socket: %s\n", strerror(err));
+        herr("Could not start telemetry socket: %s\n", strerror(err));
         thread_return(err);
     }
     pthread_cleanup_push(telemetry_cleanup, &telem);
@@ -441,7 +450,7 @@ void *telemetry_run(void *arg) {
     telemetry_padstate_args_t telemetry_padstate_args = {.sock = &telem, .state = args->state};
     err = pthread_create(&telemetry_padstate_thread, NULL, telemetry_update_padstate, &telemetry_padstate_args);
     if (err) {
-        fprintf(stderr, "Could not start telemetry padstate sending thread: %s\n", strerror(err));
+        herr("Could not start telemetry padstate sending thread: %s\n", strerror(err));
         thread_return(err);
     }
     pthread_cleanup_push(telemetry_cancel_padstate_thread, &telemetry_padstate_thread);
@@ -452,7 +461,7 @@ void *telemetry_run(void *arg) {
 
     err = pthread_setschedprio(telemetry_padstate_thread, 200);
     if (err) {
-        fprintf(stderr, "Could not set controller thread priority: %s\n", strerror(err));
+        herr("Could not set controller thread priority: %s\n", strerror(err));
         exit(EXIT_FAILURE);
     }
 #endif
@@ -460,11 +469,13 @@ void *telemetry_run(void *arg) {
 #if defined(DESKTOP_BUILD) || defined(CONFIG_HYSIM_PAD_SERVER_MOCK_DATA)
     /* Start mock telemetry if on desktop build or if we want mock data during */
 
+    hinfo("Starting mock telemetry\n");
     mock_telemetry(args, &telem);
 #elif !defined(CONFIG_HYSIM_PAD_SERVER_MOCK_DATA) && !defined(DESKTOP_BUILD)
 
     /* Start real telemetry if on NuttX and not mocking. */
-    printf("Starting real telemetry\n");
+
+    hinfo("Starting real telemetry\n");
     sensor_telemetry(args, &telem);
 #endif
 
@@ -539,6 +550,12 @@ void *telemetry_update_padstate(void *arg) {
         // and we confirmed it was not a spurious wakeup
         while (err != ETIMEDOUT && !state->update_recorded) {
             err = pthread_cond_timedwait(&state->update_cond, &state->update_mut, &cond_timeout);
+        }
+
+        if (state->update_recorded) {
+            hinfo("Sent updated padstate.\n");
+        } else {
+            hinfo("Sent padstate as heartbeat.\n");
         }
 
         telemetry_send_padstate(state, args->sock);
