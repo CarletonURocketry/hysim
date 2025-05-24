@@ -122,7 +122,6 @@ static void telemetry_publish_data(telemetry_sock_t *sock, telem_subtype_e type,
         pressure_body.pressure = deref(int32_t, data);
         pkt[1].iov_base = &pressure_body;
         pkt[1].iov_len = sizeof(pressure_body);
-        hinfo("Constructed pressure packet\n");
         break;
 
     case TELEM_MASS:
@@ -131,7 +130,6 @@ static void telemetry_publish_data(telemetry_sock_t *sock, telem_subtype_e type,
         mass_body.mass = deref(int32_t, data);
         pkt[1].iov_base = &mass_body;
         pkt[1].iov_len = sizeof(mass_body);
-        hinfo("Constructed mass packet\n");
         break;
 
     case TELEM_TEMP:
@@ -140,7 +138,6 @@ static void telemetry_publish_data(telemetry_sock_t *sock, telem_subtype_e type,
         temperature_body.temperature = deref(int32_t, data);
         pkt[1].iov_base = &temperature_body;
         pkt[1].iov_len = sizeof(temperature_body);
-        hinfo("Constructed temperature packet\n");
         break;
 
     case TELEM_THRUST:
@@ -149,7 +146,6 @@ static void telemetry_publish_data(telemetry_sock_t *sock, telem_subtype_e type,
         thrust_body.thrust = deref(uint32_t, data);
         pkt[1].iov_base = &thrust_body;
         pkt[1].iov_len = sizeof(thrust_body);
-        hinfo("Constructed thrust packet\n");
         break;
 
     case TELEM_CONT:
@@ -157,7 +153,6 @@ static void telemetry_publish_data(telemetry_sock_t *sock, telem_subtype_e type,
         continuity_body.state = deref(continuity_state_e, data);
         pkt[1].iov_base = &continuity_body;
         pkt[1].iov_len = sizeof(continuity_body);
-        hinfo("Constructed continuity packet\n");
         break;
 
     default:
