@@ -98,133 +98,12 @@ static void telemetry_cancel_padstate_thread(void *arg) {
     herr("Telemetry pad state thread terminated\n");
 }
 
-/*
- * A function to publish pressure, temperature, mass data.
- * @param sock The telemetry socket on which to publish.
- * @param type The telemetry type is being published.
- * @param id The id of that data
- * @param time Time of the data
- * @param data The actual data being sent, could be pressure, temperature or mass
- */
-static void telemetry_publish_data(telemetry_sock_t *sock, telem_subtype_e type, uint8_t id, uint32_t time,
-                                   void *data) {
-    header_p hdr = {.type = TYPE_TELEM, .subtype = type};
-    pressure_p pressure_body;
-    mass_p mass_body;
-    temp_p temperature_body;
-    thrust_p thrust_body;
-    continuity_state_p continuity_body;
-
-    struct iovec pkt[2] = {
-        {.iov_base = &hdr, .iov_len = sizeof(hdr)},
-    };
-
-    switch (type) {
-
-    case TELEM_PRESSURE:
-        pressure_body.id = id;
-        pressure_body.time = time;
-        pressure_body.pressure = deref(int32_t, data);
-        pkt[1].iov_base = &pressure_body;
-        pkt[1].iov_len = sizeof(pressure_body);
-        break;
-
-    case TELEM_MASS:
-        mass_body.id = id;
-        mass_body.time = time;
-        mass_body.mass = deref(int32_t, data);
-        pkt[1].iov_base = &mass_body;
-        pkt[1].iov_len = sizeof(mass_body);
-        break;
-
-    case TELEM_TEMP:
-        temperature_body.id = id;
-        temperature_body.time = time;
-        temperature_body.temperature = deref(int32_t, data);
-        pkt[1].iov_base = &temperature_body;
-        pkt[1].iov_len = sizeof(temperature_body);
-        break;
-
-    case TELEM_THRUST:
-        thrust_body.id = id;
-        thrust_body.time = time;
-        thrust_body.thrust = deref(uint32_t, data);
-        pkt[1].iov_base = &thrust_body;
-        pkt[1].iov_len = sizeof(thrust_body);
-        break;
-
-    case TELEM_CONT:
-        continuity_body.time = time;
-        continuity_body.state = deref(continuity_state_e, data);
-        pkt[1].iov_base = &continuity_body;
-        pkt[1].iov_len = sizeof(continuity_body);
-        break;
-
-    default:
-        herr("Invalid telemetry data type: %u\n", type);
-        return;
-    }
-
-    struct msghdr msg = {
-        .msg_name = NULL,
-        .msg_namelen = 0,
-        .msg_iov = pkt,
-        .msg_iovlen = (sizeof(pkt) / sizeof(pkt[0])),
-        .msg_control = NULL,
-        .msg_controllen = 0,
-        .msg_flags = 0,
-    };
-    telemetry_publish(sock, &msg);
-}
-
 #if defined(DESKTOP_BUILD) || defined(CONFIG_HYSIM_PAD_SERVER_MOCK_DATA)
 /* A function to create random data if not put in any file to read from
  * @params telem The telemetry socket to send random data over
  */
 static void random_data(telemetry_sock_t *telem) {
-
-    uint32_t time = 0;
-    uint32_t pressure = 0;
-    uint32_t temperature = 0;
-    uint32_t mass = 4000;
-
-    /* Start transmitting telemetry to active clients */
-    for (;;) {
-
-        pressure = (pressure + 1) % 255;
-        uint32_t pressure_i = 100 + pressure * 10000;
-        telemetry_publish_data(telem, TELEM_PRESSURE, 0, time, &pressure_i);
-        pressure_i = 200 + pressure * 20000;
-        telemetry_publish_data(telem, TELEM_PRESSURE, 1, time, &pressure_i);
-        pressure_i = 300 + pressure * 30000;
-        telemetry_publish_data(telem, TELEM_PRESSURE, 2, time, &pressure_i);
-        pressure_i = 250 + pressure * 40000;
-        telemetry_publish_data(telem, TELEM_PRESSURE, 3, time, &pressure_i);
-        pressure_i = 250 + pressure * 50000;
-        telemetry_publish_data(telem, TELEM_PRESSURE, 4, time, &pressure_i);
-        pressure_i = 250 + pressure * 60000;
-        telemetry_publish_data(telem, TELEM_PRESSURE, 5, time, &pressure_i);
-
-        temperature = (temperature + 78) % 20000 + 20000;
-        int32_t temp_i = temperature - 1;
-        telemetry_publish_data(telem, TELEM_TEMP, 0, time, &temp_i);
-        temp_i = 2000 + temperature * 2;
-        telemetry_publish_data(telem, TELEM_TEMP, 1, time, &temp_i);
-        temp_i = 3000 + temperature * 3;
-        telemetry_publish_data(telem, TELEM_TEMP, 2, time, &temp_i);
-        temp_i = 2500 + temperature * 4;
-        telemetry_publish_data(telem, TELEM_TEMP, 3, time, &temp_i);
-
-        mass = (mass + 10) % 4000 + 3900;
-        uint32_t mass_i = mass + 2;
-        telemetry_publish_data(telem, TELEM_MASS, 0, time, &mass_i);
-        mass_i = mass + 4;
-        telemetry_publish_data(telem, TELEM_THRUST, 0, time, &mass_i);
-
-        time = (time + 1) % 1000000;
-        usleep(100000);
-    }
-
+    printf("Sorry, no random data for you\n");
     thread_return(0);
 }
 
@@ -388,12 +267,25 @@ static void sensor_telemetry(telemetry_args_t *args, telemetry_sock_t *telem) {
 #endif
 
     for (;;) {
+        /* We hopefully won't go beyond 32 sensors */
+        struct iovec pkt[(32) * 2];
+        int sensor_count = 0;
+
         struct timespec time_t;
         clock_gettime(CLOCK_MONOTONIC, &time_t);
         uint32_t time_ms = time_t.tv_sec * 1000 + time_t.tv_nsec / 1000000;
 
+        header_p headers[32];
+        union {
+            pressure_p pressure;
+            mass_p mass;
+            temp_p temp;
+            thrust_p thrust;
+            continuity_state_p continuity;
+        } bodies[32];
+
 #if defined(CONFIG_ADC_ADS1115)
-        for (int i = 0; i < sizeof(adc_devices) / sizeof(adc_devices[0]); i++) {
+        for (int i = 0; i < arr_len(adc_devices); i++) {
 
             if (adc_devices[i].fd < 0) {
                 continue;
@@ -415,7 +307,40 @@ static void sensor_telemetry(telemetry_args_t *args, telemetry_sock_t *telem) {
 
                 int32_t sensor_val = 0;
                 err = adc_sensor_val_conversion(&channel, adc_val, &sensor_val);
-                telemetry_publish_data(telem, channel.type, channel.sensor_id, time_ms, (void *)&sensor_val);
+
+                headers[sensor_count] = (header_p){.type = TYPE_TELEM, .subtype = channel.type};
+                pkt[sensor_count * 2] =
+                    (struct iovec){.iov_base = &headers[sensor_count], .iov_len = sizeof(headers[sensor_count])};
+
+                switch (channel.type) {
+                case TELEM_PRESSURE:
+                    bodies[sensor_count].pressure = (pressure_p){.time = time_ms, .id = i, .pressure = sensor_val};
+                    pkt[sensor_count * 2 + 1] =
+                        (struct iovec){.iov_base = &bodies[sensor_count].pressure, .iov_len = sizeof(pressure_p)};
+                    sensor_count++;
+                    break;
+                case TELEM_TEMP:
+                    bodies[sensor_count].temp = (temp_p){.time = time_ms, .id = i, .temperature = sensor_val};
+                    pkt[sensor_count * 2 + 1] =
+                        (struct iovec){.iov_base = &bodies[sensor_count].temp, .iov_len = sizeof(temp_p)};
+                    sensor_count++;
+                    break;
+                case TELEM_THRUST:
+                    bodies[sensor_count].thrust = (thrust_p){.time = time_ms, .id = i, .thrust = sensor_val};
+                    pkt[sensor_count * 2 + 1] =
+                        (struct iovec){.iov_base = &bodies[sensor_count].thrust, .iov_len = sizeof(thrust_p)};
+                    sensor_count++;
+                    break;
+                case TELEM_CONT:
+                    bodies[sensor_count].continuity = (continuity_state_p){.time = time_ms, .state = sensor_val};
+                    pkt[sensor_count * 2 + 1] = (struct iovec){.iov_base = &bodies[sensor_count].continuity,
+                                                               .iov_len = sizeof(continuity_state_p)};
+                    sensor_count++;
+                    break;
+                default:
+                    herr("Invalid telemetry data type: %u\n", channel.type);
+                    break;
+                }
             }
         }
 #endif
@@ -426,11 +351,29 @@ static void sensor_telemetry(telemetry_args_t *args, telemetry_sock_t *telem) {
             if (err < 0) {
                 herr("Error fetching mass data: %d\n", err);
             } else {
-                int32_t mass = sensor_mass.data.force;
-                telemetry_publish_data(telem, TELEM_MASS, 0, time_ms, (void *)&mass);
+                headers[sensor_count] = (header_p){.type = TYPE_TELEM, .subtype = TELEM_MASS};
+                bodies[sensor_count].mass = (mass_p){.time = time_ms, .id = 0, .mass = sensor_mass.data.force};
+
+                pkt[sensor_count * 2] =
+                    (struct iovec){.iov_base = &headers[sensor_count], .iov_len = sizeof(headers[sensor_count])};
+                pkt[sensor_count * 2 + 1] =
+                    (struct iovec){.iov_base = &bodies[sensor_count].mass, .iov_len = sizeof(mass_p)};
+
+                sensor_count++;
             }
         }
 #endif
+
+        if (sensor_count > 0) {
+            struct msghdr msg = {
+                .msg_iov = pkt,
+                .msg_iovlen = sensor_count * 2,
+            };
+            telemetry_publish(telem, &msg);
+        } else {
+            herr("No sensor data to send\n");
+            usleep(1000000);
+        }
     }
 }
 #endif
@@ -503,46 +446,47 @@ void *telemetry_run(void *arg) {
  * @param sock the telemetry socket
  */
 void telemetry_send_padstate(padstate_t *state, telemetry_sock_t *sock) {
+    assert(state != NULL);
+    assert(sock != NULL);
+
     struct timespec time;
-    header_p hdr;
-    struct iovec pkt[2];
+    clock_gettime(CLOCK_MONOTONIC, &time);
+    uint32_t time_ms = time.tv_sec * 1000 + time.tv_nsec / 1000000;
+
+    struct iovec pkt[(1 + NUM_ACTUATORS) * 2];
+
     struct msghdr msg = {
         .msg_iov = pkt,
         .msg_iovlen = (sizeof(pkt) / sizeof(struct iovec)),
     };
 
-    assert(state != NULL);
-    assert(sock != NULL);
-
-    /* Find the current time in milliseconds */
-
-    clock_gettime(CLOCK_MONOTONIC, &time);
-    uint32_t time_ms = time.tv_sec * 1000 + time.tv_nsec / 1000000;
-
     /* Send arming update */
 
     arm_lvl_e arm_lvl = padstate_get_level(state);
     arm_state_p arm_body = {.time = time_ms, .state = arm_lvl};
-    hdr = (header_p){.type = TYPE_TELEM, .subtype = TELEM_ARM};
+    header_p arm_hdr = (header_p){.type = TYPE_TELEM, .subtype = TELEM_ARM};
 
-    pkt[0] = (struct iovec){.iov_base = &hdr, .iov_len = sizeof(hdr)};
+    pkt[0] = (struct iovec){.iov_base = &arm_hdr, .iov_len = sizeof(arm_hdr)};
     pkt[1] = (struct iovec){.iov_base = &arm_body, .iov_len = sizeof(arm_body)};
-
-    telemetry_publish(sock, &msg);
 
     /* Send actuator updates */
 
+    header_p headers[NUM_ACTUATORS];
+    act_state_p bodies[NUM_ACTUATORS];
+
     for (int i = 0; i < NUM_ACTUATORS; i++) {
-        hdr = (header_p){.type = TYPE_TELEM, .subtype = TELEM_ACT};
+        // Store the data in the arrays
+        headers[i] = (header_p){.type = TYPE_TELEM, .subtype = TELEM_ACT};
         bool act_state;
         padstate_get_actstate(state, i, &act_state);
-        act_state_p act_body = {.time = time_ms, .id = i, .state = act_state};
+        bodies[i] = (act_state_p){.time = time_ms, .id = i, .state = act_state};
 
-        pkt[0] = (struct iovec){.iov_base = &hdr, .iov_len = sizeof(hdr)};
-        pkt[1] = (struct iovec){.iov_base = &act_body, .iov_len = sizeof(act_body)};
-
-        telemetry_publish(sock, &msg);
+        // Point to the stored data
+        pkt[(1 + i) * 2] = (struct iovec){.iov_base = &headers[i], .iov_len = sizeof(header_p)};
+        pkt[(1 + i) * 2 + 1] = (struct iovec){.iov_base = &bodies[i], .iov_len = sizeof(act_state_p)};
     }
+
+    telemetry_publish(sock, &msg);
 }
 
 /*
@@ -563,7 +507,7 @@ void *telemetry_update_padstate(void *arg) {
         cond_timeout.tv_sec += PADSTATE_UPDATE_TIMEOUT_SEC;
 
         err = pthread_mutex_lock(&state->update_mut);
-        assert(err == 0);
+        assert(err == 0 && "Failed to lock mutex");
 
         // waiting until either the cond times out or an update is received
         // and we confirmed it was not a spurious wakeup

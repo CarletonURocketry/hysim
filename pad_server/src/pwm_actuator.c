@@ -9,12 +9,12 @@
 
 #include <errno.h>
 #include <fcntl.h>
-#include <stdio.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
 
 #include <nuttx/timers/pwm.h>
 
+#include "../../debugging/logging.h"
 #include "actuator.h"
 #include "pwm_actuator.h"
 
@@ -44,15 +44,15 @@ static int pwm_send_signal(actuator_t *act, bool open_act) {
 
     /* Get the configuration */
 
-    printf("Got characteristics\n");
+    hinfo("Got characteristics\n");
     err = ioctl(fd, PWMIOC_GETCHARACTERISTICS, &pwm_config);
     if (err < 0) {
         return errno;
     }
 
-    printf("Freq: %lu\n", pwm_config.frequency);
-    printf("duty 0: %lu\n", pwm_config.channels[0].duty);
-    printf("duty 1: %lu\n", pwm_config.channels[1].duty);
+    hinfo("Freq: %lu\n", pwm_config.frequency);
+    hinfo("Duty 0: %lu\n", pwm_config.channels[0].duty);
+    hinfo("Duty 1: %lu\n", pwm_config.channels[1].duty);
 
     pwm_config.frequency = DEFAULT_FREQUENCY;
 
@@ -70,9 +70,9 @@ static int pwm_send_signal(actuator_t *act, bool open_act) {
         pwm_config.channels[priv->channel].duty = priv->close_duty;
     }
 
-    printf("Freq: %lu\n", pwm_config.frequency);
-    printf("duty 0: %lu\n", pwm_config.channels[0].duty);
-    printf("duty 1: %lu\n", pwm_config.channels[1].duty);
+    hinfo("Freq: %lu\n", pwm_config.frequency);
+    hinfo("duty 0: %lu\n", pwm_config.channels[0].duty);
+    hinfo("duty 1: %lu\n", pwm_config.channels[1].duty);
 
     /* Set the configuration */
 
@@ -80,7 +80,7 @@ static int pwm_send_signal(actuator_t *act, bool open_act) {
     if (err < 0) {
         return errno;
     }
-    printf("Set characteristics\n");
+    hinfo("Set characteristics\n");
 
     /* Turn on the PWM signal */
 
@@ -88,7 +88,7 @@ static int pwm_send_signal(actuator_t *act, bool open_act) {
     if (err < 0) {
         return errno;
     }
-    printf("Started PWM\n");
+    hinfo("Started PWM\n");
 
     return err;
 }

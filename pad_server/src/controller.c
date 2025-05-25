@@ -195,6 +195,7 @@ static ssize_t controller_send(controller_t *controller, void *buf, size_t n) {
 void *controller_run(void *arg) {
     controller_args_t *args = (controller_args_t *)(arg);
     controller_t controller;
+    int err;
     controller.sock = -1;
     controller.client = -1;
 
@@ -202,8 +203,8 @@ void *controller_run(void *arg) {
 
     pthread_cleanup_push(controller_cleanup, &controller);
 
-    int err;
     /* Initialize the controller (creates a new socket) */
+
     err = controller_init(&controller, args->port);
     if (err) {
         herr("Could not initialize controller with error: %s\n", strerror(err));

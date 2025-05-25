@@ -2,12 +2,12 @@
 
 #include <errno.h>
 #include <fcntl.h>
-#include <stdio.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
 
 #include <nuttx/ioexpander/gpio.h>
 
+#include "../../debugging/logging.h"
 #include "actuator.h"
 #include "gpio_actuator.h"
 
@@ -19,22 +19,22 @@
 static int gpio_actuator_on(actuator_t *act) {
     int fd = open((char *)act->priv, O_RDWR);
     if (fd < 0) {
-        fprintf(stderr, "Failed to open gpio '%s' with err %d\n", (char *)act->priv, errno);
+        herr("Failed to open gpio '%s' with err %d\n", (char *)act->priv, errno);
         return -1;
     }
 
     int err = ioctl(fd, GPIOC_WRITE, true);
     if (err < 0) {
-        fprintf(stderr, "Failed to communicate via ioctl with err %d\n", errno);
+        herr("Failed to communicate via ioctl with err %d\n", errno);
         return -1;
     }
 
     if (close(fd) == -1) {
-        fprintf(stderr, "Failed to close gpio with err %d\n", errno);
+        herr("Failed to close gpio with err %d\n", errno);
         return -1;
     }
 
-    fprintf(stdout, "Actuator #%d turned on\n", act->id);
+    hinfo("Actuator #%d turned on\n", act->id);
     return 0;
 }
 
@@ -47,22 +47,22 @@ static int gpio_actuator_off(actuator_t *act) {
 
     int fd = open((char *)act->priv, O_RDWR);
     if (fd < 0) {
-        fprintf(stderr, "Failed to open gpio '%s' with err %d\n", (char *)act->priv, errno);
+        herr("Failed to open gpio '%s' with err %d\n", (char *)act->priv, errno);
         return -1;
     }
 
     int err = ioctl(fd, GPIOC_WRITE, false);
     if (err < 0) {
-        fprintf(stderr, "Failed to communicate via ioctl with err %d\n", errno);
+        herr("Failed to communicate via ioctl with err %d\n", errno);
         return -1;
     }
 
     if (close(fd) == -1) {
-        fprintf(stderr, "Failed to close gpio with err %d\n", errno);
+        herr("Failed to close gpio with err %d\n", errno);
         return -1;
     }
 
-    fprintf(stdout, "Actuator #%d turned off\n", act->id);
+    hinfo("Actuator #%d turned off\n", act->id);
     return 0;
 }
 
