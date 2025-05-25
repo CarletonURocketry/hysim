@@ -507,7 +507,7 @@ void *telemetry_update_padstate(void *arg) {
         cond_timeout.tv_sec += PADSTATE_UPDATE_TIMEOUT_SEC;
 
         err = pthread_mutex_lock(&state->update_mut);
-        assert(err == 0);
+        assert(err == 0 && "Failed to lock mutex");
 
         // waiting until either the cond times out or an update is received
         // and we confirmed it was not a spurious wakeup
