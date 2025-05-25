@@ -267,7 +267,9 @@ static void sensor_telemetry(telemetry_args_t *args, telemetry_sock_t *telem) {
 #endif
 
     for (;;) {
+
         /* We hopefully won't go beyond 32 sensors */
+
         struct iovec pkt[(32) * 2];
         int sensor_count = 0;
 
@@ -314,19 +316,22 @@ static void sensor_telemetry(telemetry_args_t *args, telemetry_sock_t *telem) {
 
                 switch (channel.type) {
                 case TELEM_PRESSURE:
-                    bodies[sensor_count].pressure = (pressure_p){.time = time_ms, .id = i, .pressure = sensor_val};
+                    bodies[sensor_count].pressure =
+                        (pressure_p){.time = time_ms, .id = channel.sensor_id, .pressure = sensor_val};
                     pkt[sensor_count * 2 + 1] =
                         (struct iovec){.iov_base = &bodies[sensor_count].pressure, .iov_len = sizeof(pressure_p)};
                     sensor_count++;
                     break;
                 case TELEM_TEMP:
-                    bodies[sensor_count].temp = (temp_p){.time = time_ms, .id = i, .temperature = sensor_val};
+                    bodies[sensor_count].temp =
+                        (temp_p){.time = time_ms, .id = channel.sensor_id, .temperature = sensor_val};
                     pkt[sensor_count * 2 + 1] =
                         (struct iovec){.iov_base = &bodies[sensor_count].temp, .iov_len = sizeof(temp_p)};
                     sensor_count++;
                     break;
                 case TELEM_THRUST:
-                    bodies[sensor_count].thrust = (thrust_p){.time = time_ms, .id = i, .thrust = sensor_val};
+                    bodies[sensor_count].thrust =
+                        (thrust_p){.time = time_ms, .id = channel.sensor_id, .thrust = sensor_val};
                     pkt[sensor_count * 2 + 1] =
                         (struct iovec){.iov_base = &bodies[sensor_count].thrust, .iov_len = sizeof(thrust_p)};
                     sensor_count++;
