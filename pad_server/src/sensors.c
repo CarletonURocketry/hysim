@@ -131,7 +131,7 @@ int adc_sensor_val_conversion(adc_channel_t *channel, int32_t adc_val, int32_t *
     /* 6.144 is the FSR of the ADC at PGA value 0 */
 
     double sensor_voltage = ((double)adc_val * 6.144) / (32768.0);
-    hinfo("Sensor voltage: %.2fV\n", sensor_voltage);
+    hinfo("Channel #%u Voltage: %.2fV\n", channel->channel_num, sensor_voltage);
 
     switch (channel->type) {
 
@@ -149,13 +149,13 @@ int adc_sensor_val_conversion(adc_channel_t *channel, int32_t adc_val, int32_t *
         }
 
         *output_val = 1000 * map_value(sensor_voltage, 1.0, 5.0, 0.0, val_max);
-        hinfo("Pressure: %d mPSI\n", *output_val);
+        hinfo("Pressure #%d: %d mPSI\n", channel->sensor_id, *output_val);
     } break;
 
     case TELEM_MASS: {
         /* 0 - 2,500lbs according to Antoine, using values in Newtons */
         *output_val = map_value(sensor_voltage, 0, 5.0, 0.0, 11120.5);
-        hinfo("Mass: %d N\n", *output_val);
+        hinfo("Mass #%d: %d N\n", channel->sensor_id, *output_val);
     } break;
 
     case TELEM_CONT: {
@@ -196,7 +196,7 @@ int adc_sensor_val_conversion(adc_channel_t *channel, int32_t adc_val, int32_t *
         } else {
             *output_val = 0;
         }
-        hinfo("Temperature: %d mC\n", *output_val);
+        hinfo("Temperature #%d: %d mC\n", channel->sensor_id, *output_val);
     } break;
     }
     return 0;
