@@ -16,19 +16,19 @@
 #ifndef DESKTOP_BUILD
 
 #ifdef CONFIG_HYSIM_PAD_SERVER_LOG_ERR
-#define herr(fstring, ...) syslog(LOG_ERR, "ERR:"__HLOGSTR(fstring), __FUNCTION__ __VA_OPT__(, ) __VA_ARGS__)
+#define herr(fstring, ...) fprintf(stderr, "ERR:"__HLOGSTR(fstring), __FUNCTION__ __VA_OPT__(, ) __VA_ARGS__)
 #else
 #define herr(fstring, ...)
 #endif
 
 #ifdef CONFIG_HYSIM_PAD_SERVER_LOG_WARN
-#define hwarn(fstring, ...) syslog(LOG_ERR, "WARN:"__HLOGSTR(fstring), __FUNCTION__ __VA_OPT__(, ) __VA_ARGS__)
+#define hwarn(fstring, ...) fprintf(stderr, "WARN:"__HLOGSTR(fstring), __FUNCTION__ __VA_OPT__(, ) __VA_ARGS__)
 #else
 #define hwarn(fstring, ...)
 #endif
 
 #ifdef CONFIG_HYSIM_PAD_SERVER_LOG_INFO
-#define hinfo(fstring, ...) syslog(LOG_ERR, "INFO:"__HLOGSTR(fstring), __FUNCTION__ __VA_OPT__(, ) __VA_ARGS__)
+#define hinfo(fstring, ...) fprintf(stdout, "INFO:"__HLOGSTR(fstring), __FUNCTION__ __VA_OPT__(, ) __VA_ARGS__)
 #else
 #define hinfo(fstring, ...)
 #endif
