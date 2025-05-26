@@ -26,6 +26,54 @@
 #endif
 
 /*
+ * Enables TCP keep-alive on the socket. Based on examples/netloop implementation.
+ * @param sockfd The socket to enable TCP keep-alive for
+ * @return 0 on success, error code on failure.
+ */
+static int setsock_keepalive(int sockfd) {
+    int err;
+    int value;
+    struct timeval tv;
+
+    value = 1;
+    err = setsockopt(sockfd, SOL_SOCKET, SO_KEEPALIVE, &value, sizeof(int));
+    if (err < 0) {
+        err = errno;
+        herr("setsockopt(SO_KEEPALIVE) failed: %d\n", err);
+        return err;
+    }
+
+    tv.tv_sec = 5;
+    tv.tv_usec = 0;
+
+    err = setsockopt(sockfd, IPPROTO_TCP, TCP_KEEPIDLE, &tv, sizeof(struct timeval));
+    if (err < 0) {
+        err = errno;
+        herr("setsockopt(TCP_KEEPIDLE) failed: %d\n", err);
+        return err;
+    }
+
+    tv.tv_sec = 1;
+    tv.tv_usec = 0;
+
+    err = setsockopt(sockfd, IPPROTO_TCP, TCP_KEEPINTVL, &tv, sizeof(struct timeval));
+    if (err < 0) {
+        err = errno;
+        herr("setsockopt(TCP_KEEPIDLE) failed: %d\n", err);
+        return err;
+    }
+
+    value = 3;
+    err = setsockopt(sockfd, IPPROTO_TCP, TCP_KEEPCNT, &value, sizeof(int));
+    if (err < 0) {
+        err = errno;
+        herr("setsockopt(SO_KEEPALIVE) failed: %d\n", err);
+        return err;
+    }
+    return err;
+}
+
+/*
  * Initializes the controller to be ready to create a TCP connection.
  * @param controller The controller to initialize.
  * @param port The port to use for the connection.
@@ -58,54 +106,7 @@ static int controller_init(controller_t *controller, uint16_t port) {
         return errno;
     }
 
-    /* Set up keep-alive options */
-
-    int keepalive = 1;
-    err = setsockopt(controller->sock, SOL_SOCKET, SO_KEEPALIVE, (void *)&keepalive, sizeof(keepalive));
-    if (err < 0) {
-        herr("Failed to set socket as keep-alive: %d.\n", errno);
-        return errno;
-    }
-
-    /* Each interval between ACK probes is `int_secs` long */
-
-#ifdef DESKTOP_BUILD
-    int int_secs = KEEPALIVE_INTERVAL_SECS;
-#else
-    struct timeval int_secs = {.tv_sec = KEEPALIVE_INTERVAL_SECS, .tv_usec = 0};
-#endif
-    err = setsockopt(controller->sock, IPPROTO_TCP, TCP_KEEPINTVL, &int_secs, sizeof(int_secs));
-    if (err < 0) {
-#ifdef DESKTOP_BUILD
-        herr("Failed to set keep-alive interval to %d: %d.\n", int_secs, errno);
-#else
-        herr("Failed to set keep-alive interval to %lu: %d.\n", int_secs.tv_sec, errno);
-#endif
-        return errno;
-    }
-
-#ifndef __APPLE__
-    /* Idle `int_secs` before starting to probe with keep-alive ACKS */
-
-    err = setsockopt(controller->sock, IPPROTO_TCP, TCP_KEEPIDLE, &int_secs, sizeof(int_secs));
-    if (err < 0) {
-#ifdef DESKTOP_BUILD
-        herr("Failed to set keep-alive idle to %d: %d.\n", int_secs, errno);
-#else
-        herr("Failed to set keep-alive idle to %lu: %d.\n", int_secs.tv_sec, errno);
-#endif
-        return errno;
-    }
-#endif
-
-    int count = KEEPALIVE_N_PROBES; /* Gives 10 probes (10 * `int_secs` seconds) to regain connection */
-    err = setsockopt(controller->sock, IPPROTO_TCP, TCP_KEEPCNT, &count, sizeof(int));
-    if (err < 0) {
-        herr("Failed to set keep-alive probe count to %d: %d.\n", count, errno);
-        return errno;
-    }
-
-    return 0;
+    return setsock_keepalive(controller->sock);
 }
 
 /*
@@ -114,8 +115,6 @@ static int controller_init(controller_t *controller, uint16_t port) {
  * @return 0 for success, or the error that occurred.
  */
 static int controller_accept(controller_t *controller) {
-    int err;
-
     /* Listen for a controller client connection */
 
     if (listen(controller->sock, MAX_CONTROLLERS) < 0) {
@@ -131,54 +130,7 @@ static int controller_accept(controller_t *controller) {
         return errno;
     }
 
-    /* Set up keep-alive options */
-
-    int keepalive = 1;
-    err = setsockopt(controller->client, SOL_SOCKET, SO_KEEPALIVE, (void *)&keepalive, sizeof(keepalive));
-    if (err < 0) {
-        herr("Failed to set socket as keep-alive: %d.\n", errno);
-        return errno;
-    }
-
-    /* Each interval between ACK probes is `int_secs` long */
-
-#ifdef DESKTOP_BUILD
-    int int_secs = KEEPALIVE_INTERVAL_SECS;
-#else
-    struct timeval int_secs = {.tv_sec = KEEPALIVE_INTERVAL_SECS, .tv_usec = 0};
-#endif
-    err = setsockopt(controller->client, IPPROTO_TCP, TCP_KEEPINTVL, &int_secs, sizeof(int_secs));
-    if (err < 0) {
-#ifdef DESKTOP_BUILD
-        herr("Failed to set keep-alive interval to %d: %d.\n", int_secs, errno);
-#else
-        herr("Failed to set keep-alive interval to %lu: %d.\n", int_secs.tv_sec, errno);
-#endif
-        return errno;
-    }
-
-#ifndef __APPLE__
-    /* Idle `int_secs` before starting to probe with keep-alive ACKS */
-
-    err = setsockopt(controller->client, IPPROTO_TCP, TCP_KEEPIDLE, &int_secs, sizeof(int_secs));
-    if (err < 0) {
-#ifdef DESKTOP_BUILD
-        herr("Failed to set keep-alive idle to %d: %d.\n", int_secs, errno);
-#else
-        herr("Failed to set keep-alive idle to %lu: %d.\n", int_secs.tv_sec, errno);
-#endif
-        return errno;
-    }
-#endif
-
-    int count = KEEPALIVE_N_PROBES; /* Gives 10 probes (10 * `int_secs` seconds) to regain connection */
-    err = setsockopt(controller->client, IPPROTO_TCP, TCP_KEEPCNT, &count, sizeof(int));
-    if (err < 0) {
-        herr("Failed to set keep-alive probe count to %d: %d.\n", count, errno);
-        return errno;
-    }
-
-    return 0;
+    return setsock_keepalive(controller->client);
 }
 
 /*
