@@ -4,6 +4,7 @@
 #include <semaphore.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <sys/ioctl.h>
 
 #include "../../debugging/logging.h"

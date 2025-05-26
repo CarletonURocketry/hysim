@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <sys/time.h>
 #include <unistd.h>
 
 #include "../../debugging/logging.h"
@@ -17,11 +18,11 @@
 #define thread_return(e) pthread_exit((void *)(unsigned long)((e)))
 
 #ifndef KEEPALIVE_N_PROBES
-#define KEEPALIVE_N_PROBES 5
+#define KEEPALIVE_N_PROBES 2
 #endif
 
 #ifndef KEEPALIVE_INTERVAL_SECS
-#define KEEPALIVE_INTERVAL_SECS 60
+#define KEEPALIVE_INTERVAL_SECS 10
 #endif
 
 /*
@@ -68,19 +69,31 @@ static int controller_init(controller_t *controller, uint16_t port) {
 
     /* Each interval between ACK probes is `int_secs` long */
 
+#ifdef DESKTOP_BUILD
     int int_secs = KEEPALIVE_INTERVAL_SECS;
-    err = setsockopt(controller->sock, IPPROTO_TCP, TCP_KEEPINTVL, &int_secs, sizeof(int));
+#else
+    struct timeval int_secs = {.tv_sec = KEEPALIVE_INTERVAL_SECS, .tv_usec = 0};
+#endif
+    err = setsockopt(controller->sock, IPPROTO_TCP, TCP_KEEPINTVL, &int_secs, sizeof(int_secs));
     if (err < 0) {
+#ifdef DESKTOP_BUILD
         herr("Failed to set keep-alive interval to %d: %d.\n", int_secs, errno);
+#else
+        herr("Failed to set keep-alive interval to %lu: %d.\n", int_secs.tv_sec, errno);
+#endif
         return errno;
     }
 
 #ifndef __APPLE__
     /* Idle `int_secs` before starting to probe with keep-alive ACKS */
 
-    err = setsockopt(controller->sock, IPPROTO_TCP, TCP_KEEPIDLE, &int_secs, sizeof(int));
+    err = setsockopt(controller->sock, IPPROTO_TCP, TCP_KEEPIDLE, &int_secs, sizeof(int_secs));
     if (err < 0) {
-        herr("Failed to set keep-alive interval to %d: %d.\n", int_secs, errno);
+#ifdef DESKTOP_BUILD
+        herr("Failed to set keep-alive idle to %d: %d.\n", int_secs, errno);
+#else
+        herr("Failed to set keep-alive idle to %lu: %d.\n", int_secs.tv_sec, errno);
+#endif
         return errno;
     }
 #endif
@@ -101,6 +114,7 @@ static int controller_init(controller_t *controller, uint16_t port) {
  * @return 0 for success, or the error that occurred.
  */
 static int controller_accept(controller_t *controller) {
+    int err;
 
     /* Listen for a controller client connection */
 
@@ -114,6 +128,53 @@ static int controller_accept(controller_t *controller) {
     controller->client = accept(controller->sock, (struct sockaddr *)&controller->addr, &addrlen);
     if (controller->client < 0) {
         herr("accept failed: %d\n", errno);
+        return errno;
+    }
+
+    /* Set up keep-alive options */
+
+    int keepalive = 1;
+    err = setsockopt(controller->client, SOL_SOCKET, SO_KEEPALIVE, (void *)&keepalive, sizeof(keepalive));
+    if (err < 0) {
+        herr("Failed to set socket as keep-alive: %d.\n", errno);
+        return errno;
+    }
+
+    /* Each interval between ACK probes is `int_secs` long */
+
+#ifdef DESKTOP_BUILD
+    int int_secs = KEEPALIVE_INTERVAL_SECS;
+#else
+    struct timeval int_secs = {.tv_sec = KEEPALIVE_INTERVAL_SECS, .tv_usec = 0};
+#endif
+    err = setsockopt(controller->client, IPPROTO_TCP, TCP_KEEPINTVL, &int_secs, sizeof(int_secs));
+    if (err < 0) {
+#ifdef DESKTOP_BUILD
+        herr("Failed to set keep-alive interval to %d: %d.\n", int_secs, errno);
+#else
+        herr("Failed to set keep-alive interval to %lu: %d.\n", int_secs.tv_sec, errno);
+#endif
+        return errno;
+    }
+
+#ifndef __APPLE__
+    /* Idle `int_secs` before starting to probe with keep-alive ACKS */
+
+    err = setsockopt(controller->client, IPPROTO_TCP, TCP_KEEPIDLE, &int_secs, sizeof(int_secs));
+    if (err < 0) {
+#ifdef DESKTOP_BUILD
+        herr("Failed to set keep-alive idle to %d: %d.\n", int_secs, errno);
+#else
+        herr("Failed to set keep-alive idle to %lu: %d.\n", int_secs.tv_sec, errno);
+#endif
+        return errno;
+    }
+#endif
+
+    int count = KEEPALIVE_N_PROBES; /* Gives 10 probes (10 * `int_secs` seconds) to regain connection */
+    err = setsockopt(controller->client, IPPROTO_TCP, TCP_KEEPCNT, &count, sizeof(int));
+    if (err < 0) {
+        herr("Failed to set keep-alive probe count to %d: %d.\n", count, errno);
         return errno;
     }
 
@@ -241,10 +302,12 @@ void *controller_run(void *arg) {
                 bread = controller_recv(&controller, (char *)&hdr + total_read, sizeof(hdr) - total_read);
                 if (bread == -1) {
                     hinfo("Error reading message header: %s\n", strerror(errno));
+                    fprintf(stderr, "Error code: %s\n", strerror(errno));
 
                     if (errno == ECONNRESET) {
                         // TODO: this should trigger an abort because it happens when TCP keep-alive is done
                         herr("Lost connection! ABORT!\n");
+                        fprintf(stderr, "Lost connection! ABORT!\n");
                     }
 
                     break;
