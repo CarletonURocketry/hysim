@@ -17,6 +17,18 @@
 /* Helper function for returning an error code from a thread */
 #define thread_return(e) pthread_exit((void *)(unsigned long)((e)))
 
+#ifndef DESKTOP_BUILD /* NuttX build */
+
+#ifdef CONFIG_HYSIM_PAD_SERVER_INTERVAL
+#define KEEPALIVE_INTERVAL_SECS CONFIG_HYSIM_PAD_SERVER_INTERVAL
+#endif
+
+#ifdef CONFIG_HYSIM_PAD_SERVER_NPROBES
+#define KEEPALIVE_N_PROBES CONFIG_HYSIM_PAD_SERVER_NPROBES
+#endif
+
+#else /* is a DESKTOP_BUILD */
+
 #ifndef KEEPALIVE_N_PROBES
 #define KEEPALIVE_N_PROBES 2
 #endif
@@ -24,6 +36,8 @@
 #ifndef KEEPALIVE_INTERVAL_SECS
 #define KEEPALIVE_INTERVAL_SECS 10
 #endif
+
+#endif /* DESKTOP_BUILD */
 
 /*
  * Enables TCP keep-alive on the socket. Based on examples/netloop implementation.
