@@ -57,7 +57,7 @@ static int setsock_keepalive(int sockfd) {
         return err;
     }
 
-    tv.tv_sec = 5;
+    tv.tv_sec = KEEPALIVE_INTERVAL_SECS;
     tv.tv_usec = 0;
 
     err = setsockopt(sockfd, IPPROTO_TCP, TCP_KEEPIDLE, &tv, sizeof(struct timeval));
@@ -67,7 +67,7 @@ static int setsock_keepalive(int sockfd) {
         return err;
     }
 
-    tv.tv_sec = 1;
+    tv.tv_sec = KEEPALIVE_INTERVAL_SECS;
     tv.tv_usec = 0;
 
     err = setsockopt(sockfd, IPPROTO_TCP, TCP_KEEPINTVL, &tv, sizeof(struct timeval));
@@ -77,7 +77,7 @@ static int setsock_keepalive(int sockfd) {
         return err;
     }
 
-    value = 3;
+    value = KEEPALIVE_N_PROBES;
     err = setsockopt(sockfd, IPPROTO_TCP, TCP_KEEPCNT, &value, sizeof(int));
     if (err < 0) {
         err = errno;
@@ -116,7 +116,7 @@ static int controller_init(controller_t *controller, uint16_t port) {
     controller->client = -1;
 
     if (bind(controller->sock, (struct sockaddr *)&controller->addr, sizeof(controller->addr)) < 0) {
-        herr("Failed to bind\n");
+        herr("Failed to bind: %d\n", errno);
         return errno;
     }
 
@@ -129,14 +129,20 @@ static int controller_init(controller_t *controller, uint16_t port) {
  * @return 0 for success, or the error that occurred.
  */
 static int controller_accept(controller_t *controller) {
+
     /* Listen for a controller client connection */
 
     if (listen(controller->sock, MAX_CONTROLLERS) < 0) {
-        herr("listen failed: %d\n", errno);
-        return errno;
+        if (errno == EADDRINUSE) {
+            hwarn("Listening more than once...\n");
+        } else {
+            herr("listen failed: %d\n", errno);
+            return errno;
+        }
     }
 
     /* Accept the first incoming connection. */
+
     socklen_t addrlen = sizeof(controller->addr);
     controller->client = accept(controller->sock, (struct sockaddr *)&controller->addr, &addrlen);
     if (controller->client < 0) {
