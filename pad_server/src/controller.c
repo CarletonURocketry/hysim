@@ -106,7 +106,7 @@ static int controller_init(controller_t *controller, uint16_t port) {
         return errno;
     }
 
-    return setsock_keepalive(controller->sock);
+    return 0;
 }
 
 /*
@@ -256,10 +256,9 @@ void *controller_run(void *arg) {
                     hinfo("Error reading message header: %s\n", strerror(errno));
                     fprintf(stderr, "Error code: %s\n", strerror(errno));
 
-                    if (errno == ECONNRESET) {
+                    if (errno == ECONNRESET || errno == ENOTCONN || errno == ECONNABORTED) {
                         // TODO: this should trigger an abort because it happens when TCP keep-alive is done
                         herr("Lost connection! ABORT!\n");
-                        fprintf(stderr, "Lost connection! ABORT!\n");
                     }
 
                     break;
