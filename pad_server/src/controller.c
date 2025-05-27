@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/select.h>
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <unistd.h>
@@ -27,6 +28,10 @@
 #define KEEPALIVE_N_PROBES CONFIG_HYSIM_PAD_SERVER_NPROBES
 #endif
 
+#ifdef CONFIG_HYSIM_PAD_SERVER_ABORT_TIME
+#define ABORT_TIMEOUT CONFIG_HYSIM_PAD_SERVER_ABORT_TIME
+#endif
+
 #else /* is a DESKTOP_BUILD */
 
 #ifndef KEEPALIVE_N_PROBES
@@ -35,6 +40,10 @@
 
 #ifndef KEEPALIVE_INTERVAL_SECS
 #define KEEPALIVE_INTERVAL_SECS 10
+#endif
+
+#ifndef ABORT_TIMEOUT
+#define ABORT_TIMEOUT 20
 #endif
 
 #endif /* DESKTOP_BUILD */
@@ -129,14 +138,33 @@ static int controller_init(controller_t *controller, uint16_t port) {
  * @return 0 for success, or the error that occurred.
  */
 static int controller_accept(controller_t *controller) {
+    bool was_connected = false; /* Already had a connection before */
+    struct timeval timeout = {.tv_sec = ABORT_TIMEOUT, .tv_usec = 0};
+    fd_set rfds;
 
     /* Listen for a controller client connection */
 
     if (listen(controller->sock, MAX_CONTROLLERS) < 0) {
         if (errno == EADDRINUSE) {
+            was_connected = true;
             hwarn("Listening more than once...\n");
         } else {
             herr("listen failed: %d\n", errno);
+            return errno;
+        }
+    }
+
+    /* If this is our second or more connection, we want to set a time-out on the accept call so that we can abort if no
+     * connection is re-established */
+
+    if (was_connected) {
+        hwarn("Setting timeout of %lu seconds for re-connect.\n", timeout.tv_sec);
+
+        FD_ZERO(&rfds);
+        FD_SET(controller->sock, &rfds);
+
+        if (select(controller->sock, &rfds, NULL, NULL, &timeout) < 0) {
+            herr("Select failed: %d\n", errno);
             return errno;
         }
     }
