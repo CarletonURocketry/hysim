@@ -141,6 +141,7 @@ static int controller_accept(controller_t *controller) {
     bool was_connected = false; /* Already had a connection before */
     struct timeval timeout = {.tv_sec = ABORT_TIMEOUT, .tv_usec = 0};
     fd_set rfds;
+    int err;
 
     /* Listen for a controller client connection */
 
@@ -163,10 +164,19 @@ static int controller_accept(controller_t *controller) {
         FD_ZERO(&rfds);
         FD_SET(controller->sock, &rfds);
 
-        if (select(controller->sock, &rfds, NULL, NULL, &timeout) < 0) {
-            herr("Select failed: %d\n", errno);
+        err = select(controller->sock + 1, &rfds, NULL, NULL, &timeout);
+        if (err < 0) {
+            herr("select failed: %d\n", errno);
             return errno;
+        } else if (err == 0) {
+            /* This indicates a time-out, since `select()` will return the number of bits set in the bit-map on success.
+             */
+            herr("Timed out waiting for new connection, ABORT!\n");
+            // nxassert(false && "Timed out waiting for new connection, ABORT!\n");
+            return ETIMEDOUT; /* Just return the error on desktop build */
         }
+
+        /* If we are here, then the `select()` call returned a 1 and it means we can accept a new connection */
     }
 
     /* Accept the first incoming connection. */
@@ -306,7 +316,7 @@ void *controller_run(void *arg) {
 
                     if (errno == ECONNRESET || errno == ENOTCONN || errno == ECONNABORTED) {
                         // TODO: this should trigger an abort because it happens when TCP keep-alive is done
-                        herr("Lost connection! ABORT!\n");
+                        herr("Lost connection with controller!\n");
                     }
 
                     break;
