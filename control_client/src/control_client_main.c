@@ -423,7 +423,7 @@ int main(int argc, char **argv) {
                 break;
             }
 
-            if (err == ENOTCONN) {
+            if (err == ENOTCONN || err == ENOTCONN || err == ECONNABORTED || err == ECONNREFUSED) {
                 /* Try to re-connect */
                 break;
             }

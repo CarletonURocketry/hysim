@@ -4,7 +4,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/select.h>
 #include <sys/socket.h>
+#include <sys/time.h>
 #include <unistd.h>
 
 #include "../../debugging/logging.h"
@@ -16,13 +18,85 @@
 /* Helper function for returning an error code from a thread */
 #define thread_return(e) pthread_exit((void *)(unsigned long)((e)))
 
+#ifndef DESKTOP_BUILD /* NuttX build */
+
+#ifdef CONFIG_HYSIM_PAD_SERVER_INTERVAL
+#define KEEPALIVE_INTERVAL_SECS CONFIG_HYSIM_PAD_SERVER_INTERVAL
+#endif
+
+#ifdef CONFIG_HYSIM_PAD_SERVER_NPROBES
+#define KEEPALIVE_N_PROBES CONFIG_HYSIM_PAD_SERVER_NPROBES
+#endif
+
+#ifdef CONFIG_HYSIM_PAD_SERVER_ABORT_TIME
+#define ABORT_TIMEOUT CONFIG_HYSIM_PAD_SERVER_ABORT_TIME
+#endif
+
+#else /* is a DESKTOP_BUILD */
+
 #ifndef KEEPALIVE_N_PROBES
-#define KEEPALIVE_N_PROBES 5
+#define KEEPALIVE_N_PROBES 2
 #endif
 
 #ifndef KEEPALIVE_INTERVAL_SECS
-#define KEEPALIVE_INTERVAL_SECS 60
+#define KEEPALIVE_INTERVAL_SECS 10
 #endif
+
+#ifndef ABORT_TIMEOUT
+#define ABORT_TIMEOUT 20
+#endif
+
+#endif /* DESKTOP_BUILD */
+
+/*
+ * Enables TCP keep-alive on the socket. Based on examples/netloop implementation.
+ * @param sockfd The socket to enable TCP keep-alive for
+ * @return 0 on success, error code on failure.
+ */
+static int setsock_keepalive(int sockfd) {
+    int err;
+    int value;
+    struct timeval tv;
+
+    value = 1;
+    err = setsockopt(sockfd, SOL_SOCKET, SO_KEEPALIVE, &value, sizeof(int));
+    if (err < 0) {
+        err = errno;
+        herr("setsockopt(SO_KEEPALIVE) failed: %d\n", err);
+        return err;
+    }
+
+#ifndef __APPLE__
+    tv.tv_sec = KEEPALIVE_INTERVAL_SECS;
+    tv.tv_usec = 0;
+
+    err = setsockopt(sockfd, IPPROTO_TCP, TCP_KEEPIDLE, &tv, sizeof(struct timeval));
+    if (err < 0) {
+        err = errno;
+        herr("setsockopt(TCP_KEEPIDLE) failed: %d\n", err);
+        return err;
+    }
+#endif
+
+    tv.tv_sec = KEEPALIVE_INTERVAL_SECS;
+    tv.tv_usec = 0;
+
+    err = setsockopt(sockfd, IPPROTO_TCP, TCP_KEEPINTVL, &tv, sizeof(struct timeval));
+    if (err < 0) {
+        err = errno;
+        herr("setsockopt(TCP_KEEPIDLE) failed: %d\n", err);
+        return err;
+    }
+
+    value = KEEPALIVE_N_PROBES;
+    err = setsockopt(sockfd, IPPROTO_TCP, TCP_KEEPCNT, &value, sizeof(int));
+    if (err < 0) {
+        err = errno;
+        herr("setsockopt(SO_KEEPALIVE) failed: %d\n", err);
+        return err;
+    }
+    return err;
+}
 
 /*
  * Initializes the controller to be ready to create a TCP connection.
@@ -53,42 +127,7 @@ static int controller_init(controller_t *controller, uint16_t port) {
     controller->client = -1;
 
     if (bind(controller->sock, (struct sockaddr *)&controller->addr, sizeof(controller->addr)) < 0) {
-        herr("Failed to bind\n");
-        return errno;
-    }
-
-    /* Set up keep-alive options */
-
-    int keepalive = 1;
-    err = setsockopt(controller->sock, SOL_SOCKET, SO_KEEPALIVE, (void *)&keepalive, sizeof(keepalive));
-    if (err < 0) {
-        herr("Failed to set socket as keep-alive: %d.\n", errno);
-        return errno;
-    }
-
-    /* Each interval between ACK probes is `int_secs` long */
-
-    int int_secs = KEEPALIVE_INTERVAL_SECS;
-    err = setsockopt(controller->sock, IPPROTO_TCP, TCP_KEEPINTVL, &int_secs, sizeof(int));
-    if (err < 0) {
-        herr("Failed to set keep-alive interval to %d: %d.\n", int_secs, errno);
-        return errno;
-    }
-
-#ifndef __APPLE__
-    /* Idle `int_secs` before starting to probe with keep-alive ACKS */
-
-    err = setsockopt(controller->sock, IPPROTO_TCP, TCP_KEEPIDLE, &int_secs, sizeof(int));
-    if (err < 0) {
-        herr("Failed to set keep-alive interval to %d: %d.\n", int_secs, errno);
-        return errno;
-    }
-#endif
-
-    int count = KEEPALIVE_N_PROBES; /* Gives 10 probes (10 * `int_secs` seconds) to regain connection */
-    err = setsockopt(controller->sock, IPPROTO_TCP, TCP_KEEPCNT, &count, sizeof(int));
-    if (err < 0) {
-        herr("Failed to set keep-alive probe count to %d: %d.\n", count, errno);
+        herr("Failed to bind: %d\n", errno);
         return errno;
     }
 
@@ -101,15 +140,49 @@ static int controller_init(controller_t *controller, uint16_t port) {
  * @return 0 for success, or the error that occurred.
  */
 static int controller_accept(controller_t *controller) {
+    bool was_connected = false; /* Already had a connection before */
+    struct timeval timeout = {.tv_sec = ABORT_TIMEOUT, .tv_usec = 0};
+    fd_set rfds;
+    int err;
 
     /* Listen for a controller client connection */
 
     if (listen(controller->sock, MAX_CONTROLLERS) < 0) {
-        herr("listen failed: %d\n", errno);
-        return errno;
+        if (errno == EADDRINUSE) {
+            was_connected = true;
+            hwarn("Listening more than once...\n");
+        } else {
+            herr("listen failed: %d\n", errno);
+            return errno;
+        }
+    }
+
+    /* If this is our second or more connection, we want to set a time-out on the accept call so that we can abort if no
+     * connection is re-established */
+
+    if (was_connected) {
+        hwarn("Setting timeout of %lu seconds for re-connect.\n", timeout.tv_sec);
+
+        FD_ZERO(&rfds);
+        FD_SET(controller->sock, &rfds);
+
+        err = select(controller->sock + 1, &rfds, NULL, NULL, &timeout);
+        if (err < 0) {
+            herr("select failed: %d\n", errno);
+            return errno;
+        } else if (err == 0) {
+            /* This indicates a time-out, since `select()` will return the number of bits set in the bit-map on success.
+             */
+            herr("Timed out waiting for new connection, ABORT!\n");
+            // nxassert(false && "Timed out waiting for new connection, ABORT!\n");
+            return ETIMEDOUT; /* Just return the error on desktop build */
+        }
+
+        /* If we are here, then the `select()` call returned a 1 and it means we can accept a new connection */
     }
 
     /* Accept the first incoming connection. */
+
     socklen_t addrlen = sizeof(controller->addr);
     controller->client = accept(controller->sock, (struct sockaddr *)&controller->addr, &addrlen);
     if (controller->client < 0) {
@@ -117,7 +190,7 @@ static int controller_accept(controller_t *controller) {
         return errno;
     }
 
-    return 0;
+    return setsock_keepalive(controller->client);
 }
 
 /*
@@ -241,10 +314,11 @@ void *controller_run(void *arg) {
                 bread = controller_recv(&controller, (char *)&hdr + total_read, sizeof(hdr) - total_read);
                 if (bread == -1) {
                     hinfo("Error reading message header: %s\n", strerror(errno));
+                    fprintf(stderr, "Error code: %s\n", strerror(errno));
 
-                    if (errno == ECONNRESET) {
+                    if (errno == ECONNRESET || errno == ENOTCONN || errno == ECONNABORTED) {
                         // TODO: this should trigger an abort because it happens when TCP keep-alive is done
-                        herr("Lost connection! ABORT!\n");
+                        herr("Lost connection with controller!\n");
                     }
 
                     break;

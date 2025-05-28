@@ -22,5 +22,18 @@ config HYSIM_CONTROL_CLIENT_STACKSIZE
         int "Control client stack size"
         default DEFAULT_TASK_STACKSIZE
 
+config HYSIM_CONTROL_CLIENT_INTERVAL
+	int "interval"
+	default 5
+	---help---
+		The interval at which to send TCP keep-alive probes, in seconds.
+
+config HYSIM_CONTROL_CLIENT_NPROBES
+	int "Probe count"
+	default 3
+	---help---
+		The number of TCP keep-alive probes to send before declaring a
+		connection broken.
+
 endif
 

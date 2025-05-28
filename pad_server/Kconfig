@@ -32,6 +32,26 @@ config HYSIM_PAD_SERVER_DEBUG
 		---help---
 			Enables debug logging options for the pad server
 
+config HYSIM_PAD_SERVER_NPROBES
+		int "Keep-alive `n` probes"
+		default 3
+		---help---
+			Configures the number of probes to send for TCP keep-alive
+			implementation.
+
+config HYSIM_PAD_SERVER_INTERVAL
+		int "Keep-alive interval"
+		default 5
+		---help---
+			Configures the interval between TCP keep-alive probes in seconds.
+
+config HYSIM_PAD_SERVER_ABORT_TIME
+		int "Abort timeout"
+		default 300
+		---help---
+			The time-out after which to abort (in seconds) if a connection is
+			not re-established with the controller.
+
 if HYSIM_PAD_SERVER_DEBUG
 
 config HYSIM_PAD_SERVER_LOG_ERR
