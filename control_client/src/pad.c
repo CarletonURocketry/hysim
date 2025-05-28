@@ -52,6 +52,7 @@ static int setsock_keepalive(int sockfd) {
         return err;
     }
 
+#ifndef __APPLE__
     tv.tv_sec = KEEPALIVE_INTERVAL_SECS;
     tv.tv_usec = 0;
 
@@ -60,6 +61,7 @@ static int setsock_keepalive(int sockfd) {
         err = errno;
         return err;
     }
+#endif
 
     tv.tv_sec = KEEPALIVE_INTERVAL_SECS;
     tv.tv_usec = 0;
