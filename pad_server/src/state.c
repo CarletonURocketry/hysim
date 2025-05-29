@@ -40,18 +40,18 @@ static const struct actuator_info ACTUATORS[] = {
      .priv = {.pwm =
                   {
                       .dev = "/dev/pwm5",
-                      .channel = 1 /* B for RP2040 */,
-                      .close_duty = 0x2666,
-                      .open_duty = 0x8ccc,
+                      .channel = 1 /* B (GP27) for RP2040 */,
+                      .close_duty = 0x4000, /* 25% of 4ms */
+                      .open_duty = 0x8000,  /* 50% of 4ms */
                   }}},
     {.id = ID_QUICK_DISCONNECT,
      .gpio = false,
      .priv = {.pwm =
                   {
                       .dev = "/dev/pwm5",
-                      .channel = 0 /* A for RP2040 */,
-                      .close_duty = 0x2666,
-                      .open_duty = 0x8ccc,
+                      .channel = 0 /* A (GP26) for RP2040 */,
+                      .close_duty = 0x2666, /* 15% of 4ms */
+                      .open_duty = 0x8ccc,  /* 55% of 4ms */
                   }}},
 };
 
