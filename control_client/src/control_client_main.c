@@ -30,7 +30,8 @@
 #include "switch.h"
 
 #define INTERRUPT_SIGNAL SIGUSR1
-#define DEBOUNCE_US 10000
+#define DEBOUNCE_MS 30
+#define DEBOUNCE_US (DEBOUNCE_MS * 1000)
 
 #define array_len(arr) (sizeof(arr) / sizeof(arr[0]))
 
@@ -114,41 +115,6 @@ static void handle_term(int sig) {
     exit(EXIT_SUCCESS);
 }
 
-#ifndef DESKTOP_BUILD
-static int debounce_read(int fd, unsigned int *final) {
-    int err;
-    unsigned int prev_value;
-    unsigned int value;
-
-    usleep(DEBOUNCE_US); /* Debounce */
-
-    err = ioctl(fd, GPIOC_READ, (unsigned long)((uintptr_t)&prev_value));
-    if (err) return err;
-    value = !prev_value;
-
-    for (;;) {
-
-        usleep(DEBOUNCE_US); /* Debounce */
-
-        err = ioctl(fd, GPIOC_READ, (unsigned long)((uintptr_t)&value));
-        if (err) return err;
-
-        /* If values are the same, then debounce correct */
-
-        if (prev_value == value) {
-            *final = value;
-            return 0;
-        }
-
-        /* Otherwise try again */
-
-        prev_value = value;
-    }
-
-    return EIO;
-}
-#endif
-
 #if !defined(CONFIG_SYSTEM_NSH) && defined(CONFIG_CDCACM_CONSOLE)
 /* Starts the NuttX USB serial interface.
  */
@@ -216,10 +182,9 @@ int main(int argc, char **argv) {
     struct sigevent notify;
     siginfo_t signal_info;
     sigset_t set;
-    unsigned int invalue = 2; /* Invalid start value */
+    unsigned int value = 2; /* Invalid switch value */
     const char *gpio_dev;
     int fd;
-    switch_t *signal_sw;
 #endif
 
 #if !defined(DESKTOP_BUILD) && !defined(CONFIG_SYSTEM_NSH)
@@ -319,6 +284,7 @@ int main(int argc, char **argv) {
             exit(EXIT_FAILURE);
         }
 
+    reconnect:
         err = pad_connect_forever(&pad);
         if (err) {
             fprintf(stderr, "Could not connect to pad server with error: %s\n", strerror(err));
@@ -367,66 +333,88 @@ int main(int argc, char **argv) {
                 }
             }
 
-            /* Signal was received, call the correct switch handler for the signal */
+            /* Signal was received, call the correct switch handlers for the signal */
 
-            signal_sw = signal_info.si_value.sival_ptr;
+            usleep(DEBOUNCE_US); /* Wait de-bouncing time */
 
-            if (signal_sw->kind == CNTRL_ACT_REQ) {
-                /* GPIO is from actuator set */
-                gpio_dev = ACTUATOR_IN[signal_sw->act_id];
-            } else {
-                /* GPIO is from arming set */
-                gpio_dev = ARM_IN[signal_sw->act_id];
+            /* Go through all of the silly switches twice in case debounce failed the first time */
+
+            for (int k = 0; k < array_len(switches); k++) {
+
+                for (int i = 0; i < array_len(switches); i++) {
+
+                    /* Open switch GPIO device */
+
+                    if (switches[i].kind == CNTRL_ACT_REQ) {
+                        gpio_dev = ACTUATOR_IN[switches[i].act_id];
+                    } else {
+                        gpio_dev = ARM_IN[switches[i].act_id];
+                    }
+
+                    if (gpio_dev == NULL) continue; /* Ignore actuators without a switch */
+
+                    /* Handle open error */
+
+                    fd = open(gpio_dev, O_RDONLY);
+                    if (fd < 0) {
+                        err = errno;
+                        fprintf(stderr, "Could not open GPIO '%s': %d\n", gpio_dev, errno);
+                        continue;
+                    }
+
+                    /* Read value */
+
+                    err = ioctl(fd, GPIOC_READ, (unsigned long)((uintptr_t)&value));
+                    if (err < 0) {
+                        fprintf(stderr, "Could not read GPIO: %d\n", errno);
+                        close(fd);
+                        continue;
+                    }
+
+                    /* If the new value is the same as the switch state, do nothing.
+                     *`value` is negated because the switches use a pull-up resistor.  */
+
+                    if (!value == switches[i].state) {
+                        close(fd);
+                        continue;
+                    }
+
+                    /* Call the correct switch callback. `invalue` is negated because the switches use a pull-up
+                     * resistor. When open circuit (off), the switch is high. When closed circuit (on) the switch is
+                     * pulled low. */
+
+                    err = switch_callback(&switches[i], &pad, !value);
+
+                    /* Print a helpful error message */
+
+                    switch (err) {
+                    case 0:
+                        printf("Switch actuated successfully\n");
+                        break;
+                    case EPERM:
+                        fprintf(stderr, "Permission denied\n");
+                        break;
+                    case EINVAL:
+                        fprintf(stderr, "Invalid actuator/arming level.\n");
+                        break;
+                    case ENODEV:
+                        fprintf(stderr, "No such actuator/arming level exists\n");
+                        break;
+                    default:
+                        fprintf(stderr, "Something went wrong: %d\n", err);
+                        break;
+                    }
+
+                    if (err == ENOTCONN || err == ENOTCONN || err == ECONNABORTED || err == ECONNREFUSED) {
+                        /* Try to re-connect */
+                        close(fd);
+                        goto reconnect;
+                    }
+
+                    close(fd); /* Everything went nominally, close and continue with the rest of the GPIO */
+                }
             }
-
-            /* Read the GPIO pin for the real value */
-
-            fd = open(gpio_dev, O_RDONLY);
-            if (fd < 0) {
-                err = errno;
-                fprintf(stderr, "Could not open GPIO '%s': %d\n", gpio_dev, errno);
-                continue;
-            }
-
-            err = debounce_read(fd, &invalue);
-            close(fd);
-
-            if (err < 0) {
-                err = errno;
-                fprintf(stderr, "Failed to re-read value from %s: %d\n", gpio_dev, errno);
-                continue;
-            }
-
-            /* Call the correct switch callback. `invalue` is negated because the switches use a pull-up resistor. When
-             * open circuit (off), the switch is high. When closed circuit (on) the switch is pulled low. */
-
-            err = switch_callback(signal_sw, &pad, !invalue);
 #endif
-
-            /* Print a helpful error message */
-
-            switch (err) {
-            case 0:
-                printf("Switch actuated successfully\n");
-                break;
-            case EPERM:
-                fprintf(stderr, "Permission denied\n");
-                break;
-            case EINVAL:
-                fprintf(stderr, "Invalid actuator/arming level.\n");
-                break;
-            case ENODEV:
-                fprintf(stderr, "No such actuator/arming level exists\n");
-                break;
-            default:
-                fprintf(stderr, "Something went wrong: %d\n", err);
-                break;
-            }
-
-            if (err == ENOTCONN || err == ENOTCONN || err == ECONNABORTED || err == ECONNREFUSED) {
-                /* Try to re-connect */
-                break;
-            }
         }
     }
 
