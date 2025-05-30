@@ -174,7 +174,7 @@ static int controller_accept(controller_t *controller) {
             /* This indicates a time-out, since `select()` will return the number of bits set in the bit-map on success.
              */
             herr("Timed out waiting for new connection, ABORT!\n");
-            // nxassert(false && "Timed out waiting for new connection, ABORT!\n");
+            nxfail("Timed out waiting for new connection, ABORT!\n");
             return ETIMEDOUT; /* Just return the error on desktop build */
         }
 
