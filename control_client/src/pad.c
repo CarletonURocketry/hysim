@@ -117,7 +117,7 @@ int pad_init(pad_t *pad, const char *ip, uint16_t port) {
         return errno;
     }
 
-    return setsock_keepalive(pad->sock);
+    return 0;
 }
 
 /*
@@ -129,7 +129,7 @@ int pad_connect(pad_t *pad) {
     if (connect(pad->sock, (struct sockaddr *)&pad->addr, sizeof(pad->addr)) < 0) {
         return errno;
     }
-    return 0;
+    return setsock_keepalive(pad->sock);
 }
 
 /*
