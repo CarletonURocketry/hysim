@@ -136,19 +136,12 @@ int adc_sensor_val_conversion(adc_channel_t *channel, int32_t adc_val, int32_t *
     switch (channel->type) {
 
     case TELEM_PRESSURE: {
-        double val_max;
-        if (channel->sensor_id == 4 || channel->sensor_id == 5) {
-            val_max = 2500.0;
-        } else {
-            val_max = 1000.0;
-        }
-
         if (sensor_voltage < 1.0) {
             *output_val = 0;
             break;
         }
 
-        *output_val = 1000 * map_value(sensor_voltage, 1.0, 5.0, 0.0, val_max);
+        *output_val = 1000 * map_value(sensor_voltage, 1.0, 5.0, 0.0, 1000.0);
         hinfo("Pressure #%d: %d mPSI\n", channel->sensor_id, *output_val);
     } break;
 
@@ -160,11 +153,11 @@ int adc_sensor_val_conversion(adc_channel_t *channel, int32_t adc_val, int32_t *
 
     case TELEM_CONT: {
         if (sensor_voltage <= 1) { /* Threshold voltage to switch state*/
-            *output_val = 0;
-        } else {
             *output_val = 1;
+        } else {
+            *output_val = 0;
         }
-        hinfo("Continuity: '%s'\n", *output_val ? "continuous" : "open circuit");
+        hinfo("Continuity: '%s'\n", *output_val ? "open circuit" : "continuous");
     } break;
 
     case TELEM_TEMP: {
