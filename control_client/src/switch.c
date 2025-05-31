@@ -90,7 +90,9 @@ int switch_callback(switch_t *sw, pad_t *pad, bool newstate) {
         act_req_p act_req = {.id = sw->act_id, .state = sw->state};
         iov[1].iov_base = &act_req;
         iov[1].iov_len = sizeof(act_req);
-        pad_send(pad, iov, iovlen); // TODO: handle err
+        if (pad_send(pad, iov, iovlen) < 0) {
+            return errno;
+        }
         return check_act_response(pad);
     } break;
 
@@ -102,7 +104,9 @@ int switch_callback(switch_t *sw, pad_t *pad, bool newstate) {
 
         iov[1].iov_base = &arm_req;
         iov[1].iov_len = sizeof(arm_req);
-        pad_send(pad, iov, iovlen); // TODO: handle err
+        if (pad_send(pad, iov, iovlen) < 0) {
+            return errno;
+        }
         return check_arm_response(pad);
     } break;
 

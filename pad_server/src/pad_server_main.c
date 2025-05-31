@@ -166,6 +166,7 @@ int main(int argc, char **argv) {
 
 #if defined(CONFIG_NSH_NETINIT) && !defined(CONFIG_SYSTEM_NSH)
     netinit_bringup();
+    sleep(1);
     hinfo("Network infrastructure intitialized\n");
 #endif
 

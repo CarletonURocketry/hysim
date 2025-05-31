@@ -200,6 +200,7 @@ int main(int argc, char **argv) {
 
 #if defined(CONFIG_NSH_NETINIT) && !defined(CONFIG_SYSTEM_NSH)
     netinit_bringup();
+    sleep(1);
 #endif
 
     /* Parse command line options. */
@@ -277,6 +278,8 @@ int main(int argc, char **argv) {
     /* Connect to pad indefinitely */
 
     for (;;) {
+
+    reconnect:
         fprintf(stderr, "Waiting for pad...\n");
         err = pad_init(&pad, ip, port);
         if (err) {
@@ -284,7 +287,6 @@ int main(int argc, char **argv) {
             exit(EXIT_FAILURE);
         }
 
-    reconnect:
         err = pad_connect_forever(&pad);
         if (err) {
             fprintf(stderr, "Could not connect to pad server with error: %s\n", strerror(err));
@@ -407,7 +409,8 @@ int main(int argc, char **argv) {
 
                     if (err == ENOTCONN || err == ENOTCONN || err == ECONNABORTED || err == ECONNREFUSED) {
                         /* Try to re-connect */
-                        close(fd);
+                        pad_disconnect(&pad); /* Close socket with the pad since it was destroyed anyways */
+                        close(fd);            /* Close GPIO */
                         goto reconnect;
                     }
 
