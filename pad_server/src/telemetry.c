@@ -357,8 +357,11 @@ static void sensor_telemetry(telemetry_args_t *args, telemetry_sock_t *telem) {
                 herr("Error fetching mass data: %d\n", err);
             } else {
                 headers[sensor_count] = (header_p){.type = TYPE_TELEM, .subtype = TELEM_MASS};
-                bodies[sensor_count].mass = (mass_p){.time = time_ms, .id = 0, .mass = sensor_mass.data.force};
-
+                bodies[sensor_count].mass =
+                    (mass_p){.time = time_ms,
+                             .id = 0,
+                             .mass = (sensor_mass.data.force - sensor_mass.zero_point) * sensor_mass.known_mass_grams /
+                                     sensor_mass.known_mass_point};
                 pkt[sensor_count * 2] =
                     (struct iovec){.iov_base = &headers[sensor_count], .iov_len = sizeof(headers[sensor_count])};
                 pkt[sensor_count * 2 + 1] =
