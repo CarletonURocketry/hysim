@@ -4,13 +4,16 @@
 #include <fcntl.h>
 #include <pthread.h>
 #include <stdint.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/uio.h>
 #include <time.h>
 #include <unistd.h>
+
+#if defined(DESKTOP_BUILD) || defined(CONFIG_HYSIM_PAD_SERVER_MOCK_DATA)
+#include <stdlib.h>
+#endif
 
 #include "../../debugging/logging.h"
 #include "../../debugging/nxassert.h"
@@ -79,8 +82,9 @@ static int telemetry_close(telemetry_sock_t *sock) {
 static int telemetry_publish(telemetry_sock_t *sock, struct msghdr *msg) {
     msg->msg_name = &sock->addr;
     msg->msg_namelen = sizeof(sock->addr);
-    sendmsg(sock->sock, msg, MSG_NOSIGNAL);
-    // TODO: handle error from sendmsg
+    if (sendmsg(sock->sock, msg, MSG_NOSIGNAL) < 0) {
+        return errno;
+    }
     return 0;
 }
 
@@ -103,8 +107,52 @@ static void telemetry_cancel_padstate_thread(void *arg) {
  * @params telem The telemetry socket to send random data over
  */
 static void random_data(telemetry_sock_t *telem) {
-    printf("Sorry, no random data for you\n");
-    thread_return(0);
+    struct iovec pkt[2];
+    struct msghdr msg = {
+        .msg_iov = pkt,
+        .msg_iovlen = sizeof(pkt) / sizeof(pkt[0]),
+    };
+    header_p hdr;
+    struct timespec time;
+    uint32_t time_ms;
+
+    /* Set up the header info for every message */
+
+    pkt[0].iov_base = &hdr;
+    pkt[0].iov_len = sizeof(hdr);
+
+    for (;;) {
+
+        /* Get the current time */
+
+        clock_gettime(CLOCK_MONOTONIC, &time);
+        time_ms = time.tv_sec * 1000 + time.tv_nsec / 1000000;
+
+        /* Send pressure transducer data for transducers 0 through 5 */
+
+        hdr.type = TYPE_TELEM;
+        hdr.subtype = TELEM_PRESSURE;
+
+        pressure_p pressure;
+        for (int i = 0; i < 6; i++) {
+            packet_pressure_init(&pressure, i, time_ms, (uint32_t)(1000 * (rand() / RAND_MAX)));
+            pkt[1].iov_base = &pressure;
+            pkt[1].iov_len = sizeof(pressure);
+            telemetry_publish(telem, &msg);
+        }
+
+        /* Send single continuity measurement */
+
+        hdr.subtype = TELEM_CONT;
+        continuity_state_p cont;
+        packet_continuity_state_init(&cont, time_ms, rand() % 2);
+
+        pkt[1].iov_base = &cont;
+        pkt[1].iov_len = sizeof(cont);
+        telemetry_publish(telem, &msg);
+
+        usleep(100000); /* 100ms sleep */
+    }
 }
 
 /*
