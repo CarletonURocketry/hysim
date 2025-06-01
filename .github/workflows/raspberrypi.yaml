@@ -1,0 +1,67 @@
+name: Raspberry Pi Compilation
+
+on: 
+  push:
+    branches:
+      main
+
+jobs:
+  compile:
+    runs-on: ubuntu-24.04
+    steps:
+    - name: Clone Pico SDK
+      uses: actions/checkout@v4
+      with: 
+        repository: raspberrypi/pico-sdk
+        path: pico-sdk
+    - name: Add pico-sdk to env
+      run: export PICO_SDK_PATH=${{ github.workspace }}/pico-sdk
+    - name: Clone Picotool
+      uses: actions/checkout@v4
+      with: 
+        repository: raspberrypi/picotool
+        path: picotool
+    - name: Install picotool dependencies
+      run: sudo apt install build-essential pkg-config libusb-1.0-0-dev cmake
+    - name: Build picotool
+      run: | 
+        cd picotool
+        mkdir build
+        cd build
+        cmake ..
+        make
+        cd ${{ github.workspace }} 
+    - name: Clone Nuttx
+      uses: actions/checkout@v4
+      with:
+        repository: CarletonURocketry/nuttx
+        path: nuttx
+    - name: Clone Nuttx Apps
+      uses: actions/checkout@v4
+      with:
+        repository: apache/nuttx-apps
+        path: nuttx-apps
+    - name: Clone hybrid-pcc
+      uses: actions/checkout@v4
+      with:
+        repository: CarletonURocketry/hybrid-pcc
+        path: hybrid-pcc
+    - name: Clone hysim
+      uses: actions/checkout@v4
+      with:
+        repository: CarletonURocketry/hysim
+        path: nuttx-apps/hysim
+    - name: Compile for Raspberry pi
+      run: |
+        cd nuttx
+        ./tools/configure.sh ../hybrid-pcc/configs/hybrid-control
+        make -j 
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        path: nuttx/nuttx.uf2
+        name: nuttx_uf2
+      
+        
+        
+    
