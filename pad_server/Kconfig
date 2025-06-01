@@ -74,4 +74,14 @@ config HYSIM_PAD_SERVER_LOG_INFO
 
 endif
 
+config HYSIM_PAD_SERVER_NAU7802_KNOWN_WEIGHT
+		int "The known weight in grams"
+		default 1000
+		---help---
+			The known weight in grams for the NAU7802 sensor.
+
+config HYSIM_PAD_SERVER_NAU7802_KNOWN_POINT
+		int "The measured output of the known weight"
+		default 1000
+
 endif

@@ -400,13 +400,18 @@ static void sensor_telemetry(telemetry_args_t *args, telemetry_sock_t *telem) {
 
 #if defined(CONFIG_SENSORS_NAU7802)
         if (sensor_mass.available) {
+            hinfo("Sensor mass available\n");
             err = sensor_mass_fetch(&sensor_mass);
             if (err < 0) {
                 herr("Error fetching mass data: %d\n", err);
             } else {
                 headers[sensor_count] = (header_p){.type = TYPE_TELEM, .subtype = TELEM_MASS};
-                bodies[sensor_count].mass = (mass_p){.time = time_ms, .id = 0, .mass = sensor_mass.data.force};
 
+                float slope = (float)sensor_mass.known_mass_grams /
+                              (float)(sensor_mass.known_mass_point - sensor_mass.zero_point);
+                int32_t output = (int32_t)((sensor_mass.data.force - sensor_mass.zero_point) * slope);
+                hinfo("Mass in grams: %ld\n", output);
+                bodies[sensor_count].mass = (mass_p){.time = time_ms, .id = 0, .mass = output};
                 pkt[sensor_count * 2] =
                     (struct iovec){.iov_base = &headers[sensor_count], .iov_len = sizeof(headers[sensor_count])};
                 pkt[sensor_count * 2 + 1] =

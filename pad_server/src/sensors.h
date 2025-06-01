@@ -40,9 +40,19 @@ int adc_sensor_val_conversion(adc_channel_t *channel, int32_t adc_val, int32_t *
 #ifdef CONFIG_SENSORS_NAU7802
 #include <uORB/uORB.h>
 
+#ifndef DESKTOP_BUILD
+#define SENSOR_MASS_KNOWN_WEIGHT CONFIG_HYSIM_PAD_SERVER_NAU7802_KNOWN_WEIGHT
+#define SENSOR_MASS_KNOWN_POINT CONFIG_HYSIM_PAD_SERVER_NAU7802_KNOWN_POINT
+#else
+#ifndef SENSOR_MASS_KNOWN_WEIGHT
 #define SENSOR_MASS_KNOWN_WEIGHT 1000
-#define SENSOR_MASS_KNOWN_POINT 1000
+#endif
 
+#ifndef SENSOR_MASS_KNOWN_POINT
+#define SENSOR_MASS_KNOWN_POINT 1000
+#endif
+
+#endif
 typedef struct {
     const struct orb_metadata *imu_meta;
     int imu;
