@@ -11,6 +11,10 @@
 #include <time.h>
 #include <unistd.h>
 
+#if !defined(DESKTOP_BUILD)
+#include <nuttx/analog/ads1115.h>
+#endif
+
 #if defined(DESKTOP_BUILD) || defined(CONFIG_HYSIM_PAD_SERVER_MOCK_DATA)
 #include <stdlib.h>
 #endif
@@ -335,51 +339,55 @@ static void sensor_telemetry(telemetry_args_t *args, telemetry_sock_t *telem) {
         } bodies[32];
 
 #if defined(CONFIG_ADC_ADS1115)
+        struct adc_msg_s sample;
+        adc_channel_t *channel;
+
         for (int i = 0; i < arr_len(adc_devices); i++) {
 
             if (adc_devices[i].fd < 0) {
                 continue;
             }
 
-            err = adc_trigger_conversion(&adc_devices[i]);
-            if (err < 0) {
-                herr("Failed to trigger ADC conversion on id %d: %d\n", adc_devices[i].id, err);
-                continue;
-            }
-
-            err = adc_read_value(&adc_devices[i]);
             for (int j = 0; j < adc_devices[i].n_channels; j++) {
-                adc_channel_t channel = adc_devices[i].channels[j];
 
-                int32_t adc_val = adc_devices[i].sample[channel.channel_num].am_data;
+                channel = &adc_devices[i].channels[j];
+
+                /* Read specifically the channel of interest */
+
+                sample.am_channel = channel->channel_num;
+                err = ioctl(adc_devices[i].fd, ANIOC_ADS1115_READ_CHANNEL, &sample);
+                if (err < 0) {
+                    herr("Couldn't read ADC channel %d: %d\n", i, errno);
+                    continue; /* Skip channels with errors */
+                }
 
                 /* For each channel of data we find the corresponding information */
 
                 int32_t sensor_val = 0;
-                err = adc_sensor_val_conversion(&channel, adc_val, &sensor_val);
+                err = adc_sensor_val_conversion(channel, sample.am_data, &sensor_val);
 
-                headers[sensor_count] = (header_p){.type = TYPE_TELEM, .subtype = channel.type};
+                headers[sensor_count] = (header_p){.type = TYPE_TELEM, .subtype = channel->type};
                 pkt[sensor_count * 2] =
                     (struct iovec){.iov_base = &headers[sensor_count], .iov_len = sizeof(headers[sensor_count])};
 
-                switch (channel.type) {
+                switch (channel->type) {
                 case TELEM_PRESSURE:
                     bodies[sensor_count].pressure =
-                        (pressure_p){.time = time_ms, .id = channel.sensor_id, .pressure = sensor_val};
+                        (pressure_p){.time = time_ms, .id = channel->sensor_id, .pressure = sensor_val};
                     pkt[sensor_count * 2 + 1] =
                         (struct iovec){.iov_base = &bodies[sensor_count].pressure, .iov_len = sizeof(pressure_p)};
                     sensor_count++;
                     break;
                 case TELEM_TEMP:
                     bodies[sensor_count].temp =
-                        (temp_p){.time = time_ms, .id = channel.sensor_id, .temperature = sensor_val};
+                        (temp_p){.time = time_ms, .id = channel->sensor_id, .temperature = sensor_val};
                     pkt[sensor_count * 2 + 1] =
                         (struct iovec){.iov_base = &bodies[sensor_count].temp, .iov_len = sizeof(temp_p)};
                     sensor_count++;
                     break;
                 case TELEM_THRUST:
                     bodies[sensor_count].thrust =
-                        (thrust_p){.time = time_ms, .id = channel.sensor_id, .thrust = sensor_val};
+                        (thrust_p){.time = time_ms, .id = channel->sensor_id, .thrust = sensor_val};
                     pkt[sensor_count * 2 + 1] =
                         (struct iovec){.iov_base = &bodies[sensor_count].thrust, .iov_len = sizeof(thrust_p)};
                     sensor_count++;
@@ -391,7 +399,7 @@ static void sensor_telemetry(telemetry_args_t *args, telemetry_sock_t *telem) {
                     sensor_count++;
                     break;
                 default:
-                    herr("Invalid telemetry data type: %u\n", channel.type);
+                    herr("Invalid telemetry data type: %u\n", channel->type);
                     break;
                 }
             }

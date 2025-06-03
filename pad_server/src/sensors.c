@@ -18,32 +18,6 @@ static double map_value(double value, double in_min, double in_max, double out_m
     return out_min + slope * (value - in_min);
 }
 
-#ifdef CONFIG_ADC_ADS1115
-/*
- * A function to trigger ADC conversion
- * @param adc The ADC device structure
- * @return 0 for success, error code on failure
- */
-int adc_trigger_conversion(adc_device_t *adc) { return ioctl(adc->fd, ANIOC_TRIGGER, 0); }
-
-/*
- * A function to read ADC value after conversion
- * @param adc The ADC device structure
- * @return 0 for success, error code on failure
- */
-int adc_read_value(adc_device_t *adc) {
-    ssize_t nbytes = read(adc->fd, adc->sample, sizeof(adc->sample));
-    if (nbytes < 0) {
-        herr("Failed to read ADC value\n");
-        return nbytes;
-    } else if (nbytes == 0) {
-        return -1;
-    }
-    return OK;
-}
-
-#endif
-
 #ifdef CONFIG_SENSORS_NAU7802
 /* A funcion to fetch the sensor mass data
  * @param sensor_mass The sensor mass object
