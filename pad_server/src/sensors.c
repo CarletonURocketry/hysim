@@ -119,8 +119,12 @@ int adc_sensor_val_conversion(adc_channel_t *channel, int32_t adc_val, int32_t *
         hinfo("Pressure #%d: %d mPSI\n", channel->sensor_id, *output_val);
     } break;
 
-    case TELEM_MASS: {
+    case TELEM_THRUST: {
         /* 0 - 2,500lbs according to Antoine, using values in Newtons */
+        if (sensor_voltage < 0) {
+            *output_val = 0;
+            break;
+        }
         *output_val = map_value(sensor_voltage, 0, 5.0, 0.0, 11120.5);
         hinfo("Mass #%d: %d N\n", channel->sensor_id, *output_val);
     } break;
