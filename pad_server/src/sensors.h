@@ -26,13 +26,10 @@ typedef struct {
     int id;
     int fd;
     const char *devpath;
-    struct adc_msg_s sample[N_ADC_CHANNELS];
     int n_channels;
     adc_channel_t channels[4];
 } adc_device_t;
 
-int adc_read_value(adc_device_t *adc);
-int adc_trigger_conversion(adc_device_t *adc);
 int adc_sensor_val_conversion(adc_channel_t *channel, int32_t adc_val, int32_t *output_val);
 
 #endif

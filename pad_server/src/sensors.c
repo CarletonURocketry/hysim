@@ -18,32 +18,6 @@ static double map_value(double value, double in_min, double in_max, double out_m
     return out_min + slope * (value - in_min);
 }
 
-#ifdef CONFIG_ADC_ADS1115
-/*
- * A function to trigger ADC conversion
- * @param adc The ADC device structure
- * @return 0 for success, error code on failure
- */
-int adc_trigger_conversion(adc_device_t *adc) { return ioctl(adc->fd, ANIOC_TRIGGER, 0); }
-
-/*
- * A function to read ADC value after conversion
- * @param adc The ADC device structure
- * @return 0 for success, error code on failure
- */
-int adc_read_value(adc_device_t *adc) {
-    ssize_t nbytes = read(adc->fd, adc->sample, sizeof(adc->sample));
-    if (nbytes < 0) {
-        herr("Failed to read ADC value\n");
-        return nbytes;
-    } else if (nbytes == 0) {
-        return -1;
-    }
-    return OK;
-}
-
-#endif
-
 #ifdef CONFIG_SENSORS_NAU7802
 /* A funcion to fetch the sensor mass data
  * @param sensor_mass The sensor mass object
@@ -145,8 +119,12 @@ int adc_sensor_val_conversion(adc_channel_t *channel, int32_t adc_val, int32_t *
         hinfo("Pressure #%d: %d mPSI\n", channel->sensor_id, *output_val);
     } break;
 
-    case TELEM_MASS: {
+    case TELEM_THRUST: {
         /* 0 - 2,500lbs according to Antoine, using values in Newtons */
+        if (sensor_voltage < 0) {
+            *output_val = 0;
+            break;
+        }
         *output_val = map_value(sensor_voltage, 0, 5.0, 0.0, 11120.5);
         hinfo("Mass #%d: %d N\n", channel->sensor_id, *output_val);
     } break;
