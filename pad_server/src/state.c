@@ -4,22 +4,55 @@
 #include <semaphore.h>
 #include <stdbool.h>
 #include <stdint.h>
-#include <stdio.h>
-
-#include "actuator.h"
-#include "gpio_actuator.h"
-#include "state.h"
 #include <sys/ioctl.h>
 
-static const char *ACTUATOR_GPIO[NUM_ACTUATORS] = {
-    [ID_FIRE_VALVE] = "/dev/gpio27", [ID_XV1] = "/dev/gpio2",
-    [ID_XV2] = "/dev/gpio3",         [ID_XV3] = "/dev/gpio4",
-    [ID_XV4] = "/dev/gpio5",         [ID_XV5] = "/dev/gpio6",
-    [ID_XV6] = "/dev/gpio7",         [ID_XV7] = "/dev/gpio8",
-    [ID_XV8] = "/dev/gpio9",         [ID_XV9] = "/dev/gpio10",
-    [ID_XV10] = "/dev/gpio11",       [ID_XV11] = "/dev/gpio12",
-    [ID_XV12] = "/dev/gpio12",       [ID_QUICK_DISCONNECT] = "/dev/gpio26",
-    [ID_IGNITER] = "/dev/gpio28", // TODO double check?
+#include "../../debugging/logging.h"
+#include "actuator.h"
+#include "gpio_actuator.h"
+#include "pwm_actuator.h"
+#include "state.h"
+
+struct actuator_info {
+    uint8_t id;
+    bool gpio;
+    union {
+        char *dev;
+        pwm_actinfo_t pwm;
+    } priv;
+};
+
+static const struct actuator_info ACTUATORS[] = {
+    {.id = ID_XV1, .gpio = true, .priv = {.dev = "/dev/gpio6"}},
+    {.id = ID_XV2, .gpio = true, .priv = {.dev = "/dev/gpio7"}},
+    {.id = ID_XV3, .gpio = true, .priv = {.dev = "/dev/gpio8"}},
+    {.id = ID_XV4, .gpio = true, .priv = {.dev = "/dev/gpio9"}},
+    {.id = ID_XV5, .gpio = true, .priv = {.dev = "/dev/gpio10"}},
+    {.id = ID_XV6, .gpio = true, .priv = {.dev = "/dev/gpio11"}},
+    {.id = ID_XV7, .gpio = true, .priv = {.dev = "/dev/gpio12"}},
+    {.id = ID_XV8, .gpio = true, .priv = {.dev = "/dev/gpio13"}},
+    {.id = ID_XV9, .gpio = true, .priv = {.dev = "/dev/gpio2"}},
+    {.id = ID_XV10, .gpio = true, .priv = {.dev = "/dev/gpio3"}},
+    {.id = ID_XV11, .gpio = true, .priv = {.dev = "/dev/gpio4"}},
+    {.id = ID_XV12, .gpio = true, .priv = {.dev = "/dev/gpio5"}},
+    {.id = ID_IGNITER, .gpio = true, .priv = {.dev = "/dev/gpio28"}},
+    {.id = ID_DUMP,
+     .gpio = false,
+     .priv = {.pwm =
+                  {
+                      .dev = "/dev/pwm5",
+                      .channel = 1 /* B (GP27) for RP2040 */,
+                      .close_duty = 0x4000, /* 25% of 4ms */
+                      .open_duty = 0x8000,  /* 50% of 4ms */
+                  }}},
+    {.id = ID_QUICK_DISCONNECT,
+     .gpio = false,
+     .priv = {.pwm =
+                  {
+                      .dev = "/dev/pwm5",
+                      .channel = 0 /* A (GP26) for RP2040 */,
+                      .close_duty = 0x2666, /* 15% of 4ms */
+                      .open_duty = 0x8ccc,  /* 55% of 4ms */
+                  }}},
 };
 
 /*
@@ -31,8 +64,17 @@ void padstate_init(padstate_t *state) {
     pthread_rwlock_init(&state->rw_lock, NULL);
 
     state->arm_level = ARMED_PAD;
+
+    /* Initialize all actuators */
+
     for (unsigned int i = 0; i < NUM_ACTUATORS; i++) {
-        gpio_actuator_init(&state->actuators[i], i, ACTUATOR_GPIO[i]);
+        if (ACTUATORS[i].gpio) {
+            gpio_actuator_init(&state->actuators[ACTUATORS[i].id], ACTUATORS[i].id, ACTUATORS[i].priv.dev);
+            hinfo("Initialized GPIO actuator %d\n", ACTUATORS[i].id);
+        } else {
+            pwm_actuator_init(&state->actuators[ACTUATORS[i].id], ACTUATORS[i].id, &ACTUATORS[i].priv.pwm);
+            hinfo("Initialized PWM actuator %d\n", ACTUATORS[i].id);
+        }
     }
 
     pthread_mutex_init(&state->update_mut, NULL);
@@ -69,6 +111,7 @@ int padstate_signal_update(padstate_t *state) {
 
     state->update_recorded = true;
     err = pthread_cond_signal(&state->update_cond);
+    hinfo("Signalled padstate update.\n");
     pthread_mutex_unlock(&state->update_mut);
     return err;
 }
@@ -112,8 +155,10 @@ int padstate_change_level(padstate_t *state, arm_lvl_e new_arm) {
     /* If any of these cases are true, we can perform the change */
 
     if (lvl_increase || lvl_decrease_from_armed_valves || lvl_decrease_from_firing_sequence) {
+        hinfo("Updated pad state to arming level %s.\n", arm_state_str(new_arm));
         state->arm_level = new_arm;
     } else {
+        hwarn("Rejected arming level %s.\n", arm_state_str(new_arm));
         pthread_rwlock_unlock(&state->rw_lock);
         return ARM_DENIED;
     }
@@ -137,7 +182,6 @@ int padstate_change_level(padstate_t *state, arm_lvl_e new_arm) {
  */
 int padstate_get_actstate(padstate_t *state, uint8_t act_id, bool *act_state) {
     if (act_id >= NUM_ACTUATORS) return -1;
-
     *act_state = atomic_load(&state->actuators[act_id].state);
     return 0;
 }
@@ -153,16 +197,28 @@ int pad_actuate(padstate_t *state, uint8_t id, uint8_t req_state) {
     bool is_solenoid_valve;
     arm_lvl_e arm_lvl;
     int err;
+    actuator_t *act;
 
     /* Invalid actuator ID */
 
-    if (id >= NUM_ACTUATORS) return ACT_DNE;
+    if (id >= NUM_ACTUATORS) {
+        hwarn("Invalid actuator ID: %u\n", id);
+        return ACT_DNE;
+    }
+    act = &state->actuators[id];
 
-    is_solenoid_valve = id >= ID_XV1 && id <= ID_XV12;
+    /* Actuator is the dump valve, which can always be actuated */
+
+    if (id == ID_DUMP) goto actuate_actuator;
+
+    is_solenoid_valve = (id >= ID_XV1 && id <= ID_XV12) && id != ID_FIRE_VALVE;
 
     /* Invalid state requested */
 
-    if (req_state != 0 && req_state != 1) return ACT_INV;
+    if (req_state != 0 && req_state != 1) {
+        hwarn("Request invalid actuator state: %u\n", req_state);
+        return ACT_INV;
+    }
 
     /* Get the current arming level */
 
@@ -172,36 +228,43 @@ int pad_actuate(padstate_t *state, uint8_t id, uint8_t req_state) {
 
     switch (arm_lvl) {
     case ARMED_PAD:
+        hwarn("Denied actuation of %s\n", actuator_get_name(act));
         return ACT_DENIED;
         break;
 
     case ARMED_VALVES:
         if (!is_solenoid_valve) {
+            hwarn("Denied actuation of %s\n", actuator_get_name(act));
             return ACT_DENIED;
         }
         break;
 
     case ARMED_IGNITION:
         if (!is_solenoid_valve && id != ID_QUICK_DISCONNECT) {
+            hwarn("Denied actuation of %s\n", actuator_get_name(act));
             return ACT_DENIED;
         }
         break;
 
     case ARMED_DISCONNECTED:
         if (!is_solenoid_valve && id != ID_QUICK_DISCONNECT && id != ID_IGNITER) {
+            hwarn("Denied actuation of %s\n", actuator_get_name(act));
             return ACT_DENIED;
         }
         break;
 
     case ARMED_LAUNCH:
-        // every command is available
+        /* Every command is available */
         break;
     }
 
+actuate_actuator:
+
     /* For now just always actuate the actuator */
 
-    err = actuator_set(&state->actuators[id], req_state);
+    err = actuator_set(act, req_state);
     if (err) {
+        hwarn("Failed to set actuator %s -> %u\n", actuator_get_name(act), req_state);
         errno = err;
         return -1;
     }

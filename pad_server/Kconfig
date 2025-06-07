@@ -26,5 +26,62 @@ config HYSIM_PAD_SERVER_MOCK_DATA
         bool "Use mock data instead of real sensors"
         default n
 
+config HYSIM_PAD_SERVER_DEBUG
+		bool "Debug logging"
+		default n
+		---help---
+			Enables debug logging options for the pad server
+
+config HYSIM_PAD_SERVER_NPROBES
+		int "Keep-alive `n` probes"
+		default 3
+		---help---
+			Configures the number of probes to send for TCP keep-alive
+			implementation.
+
+config HYSIM_PAD_SERVER_INTERVAL
+		int "Keep-alive interval"
+		default 5
+		---help---
+			Configures the interval between TCP keep-alive probes in seconds.
+
+config HYSIM_PAD_SERVER_ABORT_TIME
+		int "Abort timeout"
+		default 300
+		---help---
+			The time-out after which to abort (in seconds) if a connection is
+			not re-established with the controller.
+
+if HYSIM_PAD_SERVER_DEBUG
+
+config HYSIM_PAD_SERVER_LOG_ERR
+		bool "Debug error logging"
+		default n
+		---help---
+			Enables error log output
+
+config HYSIM_PAD_SERVER_LOG_WARN
+		bool "Debug warning logging"
+		default n
+		---help---
+			Enables error log output
+
+config HYSIM_PAD_SERVER_LOG_INFO
+		bool "Debug info logging"
+		default n
+		---help---
+			Enables info log output
+
 endif
 
+config HYSIM_PAD_SERVER_NAU7802_KNOWN_WEIGHT
+		int "The known weight in grams"
+		default 1000
+		---help---
+			The known weight in grams for the NAU7802 sensor.
+
+config HYSIM_PAD_SERVER_NAU7802_KNOWN_POINT
+		int "The measured output of the known weight"
+		default 1000
+
+endif

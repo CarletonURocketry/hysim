@@ -120,6 +120,11 @@ int main(int argc, char **argv) {
             mass_p *mass = (mass_p *)&buffer[sizeof(hdr)];
             printf("Load cell #%u: %d kg @ %u ms\n", mass->id, mass->mass / 1000, mass->time);
         } break;
+        case TELEM_THRUST: {
+            b_read = stream_recv(&telem_stream, &buffer, sizeof(thrust_p) + sizeof(hdr));
+            thrust_p *thrust = (thrust_p *)&buffer[sizeof(hdr)];
+            printf("Thrust sensor #%u: %d N @ %u ms\n", thrust->id, thrust->thrust, thrust->time);
+        } break;
         case TELEM_ACT: {
             b_read = stream_recv(&telem_stream, &buffer, sizeof(act_state_p) + sizeof(hdr));
             act_state_p *act = (act_state_p *)&buffer[sizeof(hdr)];

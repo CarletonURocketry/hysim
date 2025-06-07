@@ -5,11 +5,81 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <sys/socket.h>
+#include <sys/time.h>
 #include <sys/types.h>
 #include <unistd.h>
 
 #include "pad.h"
+
 #define RCVTIMEO_SEC 3;
+
+#ifndef DESKTOP_BUILD /* NuttX build */
+
+#ifdef CONFIG_HYSIM_CONTROL_CLIENT_INTERVAL
+#define KEEPALIVE_INTERVAL_SECS CONFIG_HYSIM_CONTROL_CLIENT_INTERVAL
+#endif
+
+#ifdef CONFIG_HYSIM_CONTROL_CLIENT_NPROBES
+#define KEEPALIVE_N_PROBES CONFIG_HYSIM_CONTROL_CLIENT_NPROBES
+#endif
+
+#else /* is a DESKTOP_BUILD */
+
+#ifndef KEEPALIVE_N_PROBES
+#define KEEPALIVE_N_PROBES 2
+#endif
+
+#ifndef KEEPALIVE_INTERVAL_SECS
+#define KEEPALIVE_INTERVAL_SECS 10
+#endif
+
+#endif /* DESKTOP_BUILD */
+
+/*
+ * Enables TCP keep-alive on the socket. Based on examples/netloop implementation.
+ * @param sockfd The socket to enable TCP keep-alive for
+ * @return 0 on success, error code on failure.
+ */
+static int setsock_keepalive(int sockfd) {
+    int err;
+    int value;
+    struct timeval tv;
+
+    value = 1;
+    err = setsockopt(sockfd, SOL_SOCKET, SO_KEEPALIVE, &value, sizeof(int));
+    if (err < 0) {
+        err = errno;
+        return err;
+    }
+
+#ifndef __APPLE__
+    tv.tv_sec = KEEPALIVE_INTERVAL_SECS;
+    tv.tv_usec = 0;
+
+    err = setsockopt(sockfd, IPPROTO_TCP, TCP_KEEPIDLE, &tv, sizeof(struct timeval));
+    if (err < 0) {
+        err = errno;
+        return err;
+    }
+#endif
+
+    tv.tv_sec = KEEPALIVE_INTERVAL_SECS;
+    tv.tv_usec = 0;
+
+    err = setsockopt(sockfd, IPPROTO_TCP, TCP_KEEPINTVL, &tv, sizeof(struct timeval));
+    if (err < 0) {
+        err = errno;
+        return err;
+    }
+
+    value = KEEPALIVE_N_PROBES;
+    err = setsockopt(sockfd, IPPROTO_TCP, TCP_KEEPCNT, &value, sizeof(int));
+    if (err < 0) {
+        err = errno;
+        return err;
+    }
+    return err;
+}
 
 /*
  * Initialize a pad structure.
@@ -59,7 +129,7 @@ int pad_connect(pad_t *pad) {
     if (connect(pad->sock, (struct sockaddr *)&pad->addr, sizeof(pad->addr)) < 0) {
         return errno;
     }
-    return 0;
+    return setsock_keepalive(pad->sock);
 }
 
 /*

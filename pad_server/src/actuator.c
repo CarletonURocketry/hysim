@@ -1,16 +1,17 @@
-#include "state.h"
 #include <pthread.h>
 #include <stdatomic.h>
 #include <stdint.h>
 
+#include "../../debugging/logging.h"
+#include "state.h"
+
 /* String names of the actuators. */
 static const char *ACTUATOR_STR[] = {
-    [ID_FIRE_VALVE] = "Fire valve",
     [ID_XV1] = "XV-1",
     [ID_XV2] = "XV-2",
     [ID_XV3] = "XV-3",
     [ID_XV4] = "XV-4",
-    [ID_XV5] = "XV-5",
+    [ID_FIRE_VALVE] = "XV-5 (Fire valve)", /* XV5 */
     [ID_XV6] = "XV-6",
     [ID_XV7] = "XV-7",
     [ID_XV8] = "XV-8",
@@ -20,6 +21,7 @@ static const char *ACTUATOR_STR[] = {
     [ID_XV12] = "XV-12",
     [ID_QUICK_DISCONNECT] = "Quick disconnect",
     [ID_IGNITER] = "Igniter",
+    [ID_DUMP] = "Dump valve",
 };
 
 /*
@@ -48,7 +50,7 @@ int actuator_on(actuator_t *act) {
         return err;
     }
     atomic_store(&act->state, true);
-
+    hinfo("Actuated %s -> ON\n", actuator_get_name(act));
     return 0;
 }
 
@@ -63,7 +65,7 @@ int actuator_off(actuator_t *act) {
         return err;
     }
     atomic_store(&act->state, false);
-
+    hinfo("Actuated %s -> OFF\n", actuator_get_name(act));
     return 0;
 }
 

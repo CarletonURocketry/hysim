@@ -7,12 +7,13 @@
 
 /* Agreed upon actuator IDs. */
 typedef enum {
-    ID_FIRE_VALVE = 0,
+    ID_IGNITER = 0,
     ID_XV1 = 1,
     ID_XV2 = 2,
     ID_XV3 = 3,
     ID_XV4 = 4,
-    ID_XV5 = 5,
+    ID_XV5 = 5, /* The fire valve */
+    ID_FIRE_VALVE = 5,
     ID_XV6 = 6,
     ID_XV7 = 7,
     ID_XV8 = 8,
@@ -21,7 +22,7 @@ typedef enum {
     ID_XV11 = 11,
     ID_XV12 = 12,
     ID_QUICK_DISCONNECT = 13,
-    ID_IGNITER = 14,
+    ID_DUMP = 14,
 } act_id_e;
 
 /* Forward reference */
@@ -46,6 +47,6 @@ int actuator_on(actuator_t *act);
 int actuator_off(actuator_t *act);
 void actuator_init(actuator_t *act, uint8_t id, actuate_f on, actuate_f off, void *priv);
 int actuator_set(actuator_t *act, bool new_state);
-// const char *actuator_name(actuator_t *act); Conflicts with state.h, commenting for now. - Tony
+const char *actuator_get_name(actuator_t *act);
 
 #endif // _ACTUATOR_H_

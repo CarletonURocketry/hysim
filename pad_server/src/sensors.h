@@ -26,13 +26,10 @@ typedef struct {
     int id;
     int fd;
     const char *devpath;
-    struct adc_msg_s sample[N_ADC_CHANNELS];
     int n_channels;
     adc_channel_t channels[4];
 } adc_device_t;
 
-int adc_read_value(adc_device_t *adc);
-int adc_trigger_conversion(adc_device_t *adc);
 int adc_sensor_val_conversion(adc_channel_t *channel, int32_t adc_val, int32_t *output_val);
 
 #endif
@@ -40,9 +37,19 @@ int adc_sensor_val_conversion(adc_channel_t *channel, int32_t adc_val, int32_t *
 #ifdef CONFIG_SENSORS_NAU7802
 #include <uORB/uORB.h>
 
+#ifndef DESKTOP_BUILD
+#define SENSOR_MASS_KNOWN_WEIGHT CONFIG_HYSIM_PAD_SERVER_NAU7802_KNOWN_WEIGHT
+#define SENSOR_MASS_KNOWN_POINT CONFIG_HYSIM_PAD_SERVER_NAU7802_KNOWN_POINT
+#else
+#ifndef SENSOR_MASS_KNOWN_WEIGHT
 #define SENSOR_MASS_KNOWN_WEIGHT 1000
-#define SENSOR_MASS_KNOWN_POINT 1000
+#endif
 
+#ifndef SENSOR_MASS_KNOWN_POINT
+#define SENSOR_MASS_KNOWN_POINT 1000
+#endif
+
+#endif
 typedef struct {
     const struct orb_metadata *imu_meta;
     int imu;

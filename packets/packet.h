@@ -33,10 +33,11 @@ typedef enum {
     TELEM_TEMP = 0,     /* Temperature measurement */
     TELEM_PRESSURE = 1, /* Pressure measurement */
     TELEM_MASS = 2,     /* Mass measurement */
-    TELEM_ARM = 3,      /* Arming state */
-    TELEM_ACT = 4,      /* Actuator state */
-    TELEM_WARN = 5,     /* Warning message */
-    TELEM_CONT = 6,     /* Continuity measurement */
+    TELEM_THRUST = 3,   /* Thrust measurement */
+    TELEM_ARM = 4,      /* Arming state */
+    TELEM_ACT = 5,      /* Actuator state */
+    TELEM_WARN = 6,     /* Warning message */
+    TELEM_CONT = 7,     /* Continuity measurement */
 } telem_subtype_e;
 
 /* CONTROL MESSAGES */
@@ -110,6 +111,12 @@ typedef struct {
     uint8_t id;    /* The ID of the sensor which reported the measurement. */
 } PACKED mass_p;
 
+typedef struct {
+    uint32_t time;   /* Time stamp in milliseconds since power on. */
+    uint32_t thrust; /* Thrust in Newtons. */
+    uint8_t id;      /* The ID of the sensor which reported the measurement. */
+} PACKED thrust_p;
+
 /* Arming state message */
 typedef struct {
     uint32_t time; /* Time stamp in milliseconds since power on. */
@@ -161,7 +168,8 @@ void packet_arm_ack_init(arm_ack_p *ack, arm_ack_status_e status);
 
 void packet_temp_init(temp_p *p, uint8_t id, uint32_t time, int32_t temperature);
 void packet_pressure_init(pressure_p *p, uint8_t id, uint32_t time, int32_t pressure);
-void packet_mass_init(mass_p *p, uint8_t id, uint32_t time, uint32_t mass);
+void packet_mass_init(mass_p *p, uint8_t id, uint32_t time, int32_t mass);
+void packet_thrust_init(thrust_p *p, uint8_t id, uint32_t time, uint32_t thrust);
 void packet_arm_state_init(arm_state_p *p, uint32_t time, arm_lvl_e state);
 void packet_act_state_init(act_state_p *p, uint8_t id, uint32_t time, bool state);
 void packet_warn_init(warn_p *p, uint32_t time, warn_type_e type);
