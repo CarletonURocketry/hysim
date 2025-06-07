@@ -18,6 +18,74 @@ static double map_value(double value, double in_min, double in_max, double out_m
     return out_min + slope * (value - in_min);
 }
 
+#ifdef CONFIG_ADC_ADS1115
+/*
+ * A function to trigger ADC conversion
+ * @param adc The ADC device structure
+ * @return 0 for success, error code on failure
+ */
+int adc_trigger_conversion(adc_device_t *adc) { return ioctl(adc->fd, ANIOC_TRIGGER, 0); }
+
+/*
+ * A function to read ADC value after conversion
+ * @param adc The ADC device structure
+ * @return 0 for success, error code on failure
+ */
+int adc_read_value(adc_device_t *adc) {
+    ssize_t nbytes = read(adc->fd, adc->sample, sizeof(adc->sample));
+    if (nbytes < 0) {
+        fprintf(stderr, "Failed to read ADC value\n");
+        return nbytes;
+    } else if (nbytes == 0) {
+        printf("No data read from ADC\n");
+        return -1;
+    }
+    return OK;
+}
+
+#endif
+
+#ifdef CONFIG_SENSORS_MCP9600
+
+int sensor_temp_init(sensor_temp_t *sensor_temp, char *dev) {
+    sensor_temp->dev = dev;
+    sensor_temp->imu_meta = orb_get_meta(dev);
+
+    if (sensor_temp->imu_meta == NULL) {
+        return -1;
+    }
+
+    sensor_temp->imu = orb_subscribe(sensor_temp->imu_meta);
+    if (sensor_temp->imu < 0) {
+        return -1;
+    }
+
+    sensor_temp->imu = open(dev, O_RDWR);
+    if (sensor_temp->imu < 0) {
+        return -1;
+    }
+
+    return 0;
+}
+
+/* A funcion to fetch the ambient temperature data
+ * @param The sensor temp object
+ * @param data The data to be fetched
+ * @return 0 for success, error code on failure
+ */
+int sensor_temp_fetch(sensor_temp_t *sensor_temp) {
+    int err = 0;
+    bool update = false;
+    err = orb_check(sensor_temp->imu, &update);
+    if (err < 0) {
+        return err;
+    }
+
+    return orb_copy(sensor_temp->imu_meta, sensor_temp->imu, &(sensor_temp->data));
+}
+
+#endif
+
 #ifdef CONFIG_SENSORS_NAU7802
 /* A funcion to fetch the sensor mass data
  * @param sensor_mass The sensor mass object
