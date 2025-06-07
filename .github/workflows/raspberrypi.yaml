@@ -1,0 +1,147 @@
+name: Raspberry Pi Compilation
+
+on: 
+  push:
+    branches:
+      main
+
+jobs:
+  compile:
+    runs-on: ubuntu-22.04
+    steps:
+    - name: Find latest commit for pico sdk
+      run: |
+        PICO_SDK_COMMIT=$(git ls-remote https://github.com/raspberrypi/pico-sdk.git refs/heads/master | cut -f 1)
+        echo "PICO_SDK_COMMIT=$PICO_SDK_COMMIT" >> $GITHUB_ENV
+    - name: Load cache
+      id: pico-sdk-cache
+      uses: actions/cache@v4
+      with:
+        path: pico-sdk
+        key: ${{ runner.os }}-pico-sdk-${{ env.PICO_SDK_COMMIT }}
+    - name: Clone Pico SDK
+      if: steps.pico-sdk-cache.outputs.cache-hit != 'true'
+      uses: actions/checkout@v4
+      with: 
+        token: ${{ github.token }}
+        repository: raspberrypi/pico-sdk
+        path: pico-sdk
+
+    - name: Find latest commit for pico tool
+      run: |
+        PICO_TOOL_COMMIT=$(git ls-remote https://github.com/raspberrypi/picotool.git refs/heads/master | cut -f 1)
+        echo "PICO_TOOL_COMMIT=$PICO_TOOL_COMMIT" >> $GITHUB_ENV
+    - name: Load cache
+      id: pico-tool-cache
+      uses: actions/cache@v4
+      with:
+        path: pico-sdk/picotool
+        key: ${{ runner.os }}-pico-tool-${{ env.PICO_TOOL_COMMIT }}
+    - name: Clone Picotool
+      if: steps.pico-tool-cache.outputs.cache-hit != 'true'
+      uses: actions/checkout@v4
+      with: 
+        token: ${{ github.token }}
+        repository: raspberrypi/picotool
+        path: pico-sdk/picotool
+    - name: Install picotool dependencies
+      if: steps.pico-tool-cache.outputs.cache-hit != 'true'
+      run: |
+        sudo apt-get -y update
+        sudo apt-get -y install build-essential pkg-config libusb-1.0-0-dev cmake
+    - name: Build picotool
+      if: steps.pico-tool-cache.outputs.cache-hit != 'true'
+      run: | 
+        export PICO_SDK_PATH=${{ github.workspace }}/pico-sdk
+        cd pico-sdk/picotool
+        mkdir build
+        cd build
+        cmake ..
+        make
+        cd ${{ github.workspace }} 
+
+    - name: Find latest commit for nuttx
+      run: |
+        NUTTX_COMMIT=$(git ls-remote https://github.com/CarletonURocketry/nuttx.git refs/heads/master | cut -f 1)
+        echo "NUTTX_COMMIT=$NUTTX_COMMIT" >> $GITHUB_ENV
+    - name: Load cache
+      id: nuttx-cache
+      uses: actions/cache@v4
+      with:
+        path: nuttx
+        key: ${{ runner.os }}-nuttx-${{ env.NUTTX_COMMIT }}
+    - name: Clone Nuttx
+      if: steps.nuttx-cache.outputs.cache-hit != 'true'
+      uses: actions/checkout@v4
+      with:
+        token: ${{ github.token }}
+        repository: CarletonURocketry/nuttx
+        path: nuttx
+
+    - name: Find latest commit for nuttx apps
+      run: |
+        NUTTX_APPS_COMMIT=$(git ls-remote https://github.com/apache/nuttx-apps.git refs/heads/master | cut -f 1)
+        echo "NUTTX_APPS_COMMIT=$NUTTX_APPS_COMMIT" >> $GITHUB_ENV
+    - name: Load cache
+      id: nuttx-apps-cache
+      uses: actions/cache@v4
+      with:
+        path: nuttx-apps
+        key: ${{ runner.os }}-nuttx-apps-${{ env.NUTTX_APPS_COMMIT }}   
+    - name: Clone Nuttx Apps
+      if: steps.nuttx-apps-cache.outputs.cache-hit != 'true'
+      uses: actions/checkout@v4
+      with:
+        token: ${{ github.token }}
+        repository: apache/nuttx-apps
+        path: nuttx-apps
+
+    - name: Find latest commit for hybrid-pcc
+      run: |
+        HYBRID_PCC_COMMIT=$(git ls-remote https://github.com/CarletonURocketry/hybrid-pcc.git refs/heads/main | cut -f 1)
+        echo "HYBRID_PCC_COMMIT=$HYBRID_PCC_COMMIT" >> $GITHUB_ENV
+    - name: Load cache
+      id: hybrid-pcc-cache
+      uses: actions/cache@v4
+      with:
+        path: hybrid-pcc
+        key: ${{ runner.os }}-hybrid-pcc-${{ env.HYBRID_PCC_COMMIT }}   
+    - name: Clone hybrid-pcc
+      if: steps.hybrid-pcc-cache.outputs.cache-hit != 'true'
+      uses: actions/checkout@v4
+      with:
+        token: ${{ github.token }}
+        repository: CarletonURocketry/hybrid-pcc
+        path: hybrid-pcc
+        
+    - name: Clone hysim
+      uses: actions/checkout@v4
+      with:
+        token: ${{ github.token }}
+        repository: CarletonURocketry/hysim
+        path: nuttx-apps/hysim
+    - name: Setup Nuttx dependencies
+      run: |
+        sudo apt-get -y update
+        sudo apt -y install \
+        bison flex gettext texinfo libncurses5-dev libncursesw5-dev xxd \
+        git gperf automake libtool pkg-config build-essential gperf genromfs \
+        libgmp-dev libmpc-dev libmpfr-dev libisl-dev binutils-dev libelf-dev \
+        libexpat1-dev gcc-multilib g++-multilib picocom u-boot-tools util-linux
+        sudo apt -y install kconfig-frontends
+        sudo apt -y install gcc-arm-none-eabi binutils-arm-none-eabi
+    - name: Compile for Raspberry pi
+      run: |
+        cd nuttx
+        export PICO_SDK_PATH=${{ github.workspace }}/pico-sdk
+        ./tools/configure.sh ../hybrid-pcc/configs/hybrid-control
+        make -j 
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        path: nuttx/nuttx.uf2
+        name: nuttx_uf2
+      
+        
+        
+    
