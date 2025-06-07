@@ -3,6 +3,10 @@
 #include "../../debugging/logging.h"
 #include "sensors.h"
 
+#if defined CONFIG_SENSORS_MCP9600
+#include <nuttx/sensors/mcp9600.h>
+#endif
+
 /*
  * Maps a value in the input range to the output range.
  * @param value The value to map
@@ -18,57 +22,31 @@ static double map_value(double value, double in_min, double in_max, double out_m
     return out_min + slope * (value - in_min);
 }
 
-#ifdef CONFIG_ADC_ADS1115
-/*
- * A function to trigger ADC conversion
- * @param adc The ADC device structure
- * @return 0 for success, error code on failure
- */
-int adc_trigger_conversion(adc_device_t *adc) { return ioctl(adc->fd, ANIOC_TRIGGER, 0); }
-
-/*
- * A function to read ADC value after conversion
- * @param adc The ADC device structure
- * @return 0 for success, error code on failure
- */
-int adc_read_value(adc_device_t *adc) {
-    ssize_t nbytes = read(adc->fd, adc->sample, sizeof(adc->sample));
-    if (nbytes < 0) {
-        fprintf(stderr, "Failed to read ADC value\n");
-        return nbytes;
-    } else if (nbytes == 0) {
-        printf("No data read from ADC\n");
-        return -1;
-    }
-    return OK;
-}
-
-#endif
-
 #ifdef CONFIG_SENSORS_MCP9600
 
-int sensor_temp_init(sensor_temp_t *sensor_temp, char *dev) {
-    sensor_temp->dev = dev;
-    sensor_temp->imu_meta = orb_get_meta(dev);
+int sensor_temp_init(sensor_temp_t *sensor_temp) {
+    char *topic_name = "sensor_temp";
+    sensor_temp->orb_meta = orb_get_meta(topic_name);
 
-    if (sensor_temp->imu_meta == NULL) {
+    if (sensor_temp->orb_meta == NULL) {
         return -1;
     }
 
-    sensor_temp->imu = orb_subscribe(sensor_temp->imu_meta);
-    if (sensor_temp->imu < 0) {
+    sensor_temp->fd = orb_subscribe_multi(sensor_temp->orb_meta, sensor_temp->topic);
+    if (sensor_temp->fd < 0) {
         return -1;
     }
 
-    sensor_temp->imu = open(dev, O_RDWR);
-    if (sensor_temp->imu < 0) {
+    // Set the thermocouple to be type K
+    int err = ioctl(sensor_temp->fd, SNIOC_SET_THERMO, SENSOR_THERMO_TYPE_K);
+    if (err < 0) {
         return -1;
     }
 
     return 0;
 }
 
-/* A funcion to fetch the ambient temperature data
+/* A funcion to fetch the temperature data
  * @param The sensor temp object
  * @param data The data to be fetched
  * @return 0 for success, error code on failure
@@ -76,12 +54,16 @@ int sensor_temp_init(sensor_temp_t *sensor_temp, char *dev) {
 int sensor_temp_fetch(sensor_temp_t *sensor_temp) {
     int err = 0;
     bool update = false;
-    err = orb_check(sensor_temp->imu, &update);
+    err = orb_check(sensor_temp->fd, &update);
     if (err < 0) {
         return err;
     }
 
-    return orb_copy(sensor_temp->imu_meta, sensor_temp->imu, &(sensor_temp->data));
+    if (update) {
+        return orb_copy(sensor_temp->orb_meta, sensor_temp->fd, &(sensor_temp->data));
+    }
+
+    return -1;
 }
 
 #endif
@@ -95,13 +77,13 @@ int sensor_temp_fetch(sensor_temp_t *sensor_temp) {
 int sensor_mass_fetch(sensor_mass_t *sensor_mass) {
     int err = 0;
     bool update = false;
-    err = orb_check(sensor_mass->imu, &update);
+    err = orb_check(sensor_mass->fd, &update);
     if (err < 0) {
         return err;
     }
 
     if (update) {
-        return orb_copy(sensor_mass->imu_meta, sensor_mass->imu, &(sensor_mass->data));
+        return orb_copy(sensor_mass->orb_meta, sensor_mass->fd, &(sensor_mass->data));
     }
 
     return -1;
@@ -114,14 +96,14 @@ int sensor_mass_fetch(sensor_mass_t *sensor_mass) {
 int sensor_mass_init(sensor_mass_t *sensor_mass) {
     char *name = "sensor_force0";
 
-    sensor_mass->imu_meta = orb_get_meta(name);
+    sensor_mass->orb_meta = orb_get_meta(name);
 
-    if (sensor_mass->imu_meta == NULL) {
+    if (sensor_mass->orb_meta == NULL) {
         return -1;
     }
 
-    sensor_mass->imu = orb_subscribe(sensor_mass->imu_meta);
-    if (sensor_mass->imu < 0) {
+    sensor_mass->fd = orb_subscribe(sensor_mass->orb_meta);
+    if (sensor_mass->fd < 0) {
         return -1;
     }
 
@@ -184,7 +166,7 @@ int adc_sensor_val_conversion(adc_channel_t *channel, int32_t adc_val, int32_t *
         }
 
         *output_val = 1000 * map_value(sensor_voltage, 1.0, 5.0, 0.0, 1000.0);
-        hinfo("Pressure #%d: %d mPSI\n", channel->sensor_id, *output_val);
+        hinfo("Pressure #%d: %ld mPSI\n", channel->sensor_id, *output_val);
     } break;
 
     case TELEM_THRUST: {
@@ -194,7 +176,7 @@ int adc_sensor_val_conversion(adc_channel_t *channel, int32_t adc_val, int32_t *
             break;
         }
         *output_val = map_value(sensor_voltage, 0, 5.0, 0.0, 11120.5);
-        hinfo("Mass #%d: %d N\n", channel->sensor_id, *output_val);
+        hinfo("Mass #%d: %ld N\n", channel->sensor_id, *output_val);
     } break;
 
     case TELEM_CONT: {
@@ -235,7 +217,7 @@ int adc_sensor_val_conversion(adc_channel_t *channel, int32_t adc_val, int32_t *
         } else {
             *output_val = 0;
         }
-        hinfo("Temperature #%d: %d mC\n", channel->sensor_id, *output_val);
+        hinfo("Temperature #%d: %ld mC\n", channel->sensor_id, *output_val);
     } break;
     }
     return 0;
