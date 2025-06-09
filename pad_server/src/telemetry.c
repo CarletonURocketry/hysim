@@ -267,14 +267,8 @@ static void sensor_telemetry(telemetry_args_t *args, telemetry_sock_t *telem) {
 #if defined(CONFIG_SENSORS_MCP9600)
 
     sensor_temp_t sensor_temp[2] = {
-        {
-            .available = true,
-            .topic = 2,
-        },
-        {
-            .available = true,
-            .topic = 5,
-        },
+        {.available = true, .topic = 2, .sensor_id = 2},
+        {.available = true, .topic = 5, .sensor_id = 3},
     };
 
     for (int i = 0; i < arr_len(sensor_temp); i++) {
@@ -462,8 +456,9 @@ static void sensor_telemetry(telemetry_args_t *args, telemetry_sock_t *telem) {
                     herr("Error fetching temperature topic %d: %d\n", sensor_temp[i].topic, err);
                 } else {
                     headers[sensor_count] = (header_p){.type = TYPE_TELEM, .subtype = TELEM_TEMP};
-                    bodies[sensor_count].temp =
-                        (temp_p){.time = time_ms, .id = 2 + i, .temperature = sensor_temp[i].data.temperature * 1000};
+                    bodies[sensor_count].temp = (temp_p){.time = time_ms,
+                                                         .id = sensor_temp[i].sensor_id,
+                                                         .temperature = sensor_temp[i].data.temperature * 1000};
                     pkt[sensor_count * 2] =
                         (struct iovec){.iov_base = &headers[sensor_count], .iov_len = sizeof(headers[sensor_count])};
                     pkt[sensor_count * 2 + 1] =

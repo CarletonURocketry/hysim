@@ -71,6 +71,7 @@ typedef struct {
     const struct orb_metadata *orb_meta;
     int fd;
     int topic;
+    int sensor_id;
     struct sensor_temp data;
     bool available;
 } sensor_temp_t;
