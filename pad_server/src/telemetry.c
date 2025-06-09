@@ -257,10 +257,29 @@ static void sensor_telemetry(telemetry_args_t *args, telemetry_sock_t *telem) {
         if (err < 0) {
             herr("Could not calibrate mass sensor: %d\n", err);
             sensor_mass.available = false;
+        } else {
+            hinfo("NAU7802 mass sensor inititialized.\n");
         }
     }
 
-    hinfo("NAU7802 mass sensor inititialized.\n");
+#endif
+
+#if defined(CONFIG_SENSORS_MCP9600)
+
+    sensor_temp_t sensor_temp[2] = {
+        {.available = true, .topic = 2, .sensor_id = 2},
+        {.available = true, .topic = 5, .sensor_id = 3},
+    };
+
+    for (int i = 0; i < arr_len(sensor_temp); i++) {
+        err = sensor_temp_init(&sensor_temp[i]);
+        if (err < 0) {
+            herr("Coult not initialize temperature topic %d: %d\n", sensor_temp[i].topic, err);
+            sensor_temp[i].available = false;
+        } else {
+            hinfo("Temperature topic %d initialized.\n", sensor_temp[i].topic);
+        }
+    }
 #endif
 
 #if defined(CONFIG_ADC_ADS1115)
@@ -312,9 +331,9 @@ static void sensor_telemetry(telemetry_args_t *args, telemetry_sock_t *telem) {
         adc_devices[i].fd = open(adc_devices[i].devpath, O_RDONLY);
         if (adc_devices[i].fd < 0) {
             herr("Could not open ADC device %s: %s\n", adc_devices[i].devpath, strerror(errno));
+        } else {
+            hinfo("Initialized ADC device %s\n", adc_devices[i].devpath);
         }
-
-        hinfo("Initialized ADC device %s\n", adc_devices[i].devpath);
     }
 #endif
 
@@ -408,7 +427,6 @@ static void sensor_telemetry(telemetry_args_t *args, telemetry_sock_t *telem) {
 
 #if defined(CONFIG_SENSORS_NAU7802)
         if (sensor_mass.available) {
-            hinfo("Sensor mass available\n");
             err = sensor_mass_fetch(&sensor_mass);
             if (err < 0) {
                 herr("Error fetching mass data: %d\n", err);
@@ -418,7 +436,6 @@ static void sensor_telemetry(telemetry_args_t *args, telemetry_sock_t *telem) {
                 float slope = (float)sensor_mass.known_mass_grams /
                               (float)(sensor_mass.known_mass_point - sensor_mass.zero_point);
                 int32_t output = (int32_t)((sensor_mass.data.force - sensor_mass.zero_point) * slope);
-                hinfo("Mass in grams: %ld\n", output);
                 bodies[sensor_count].mass = (mass_p){.time = time_ms, .id = 0, .mass = output};
                 pkt[sensor_count * 2] =
                     (struct iovec){.iov_base = &headers[sensor_count], .iov_len = sizeof(headers[sensor_count])};
@@ -426,6 +443,29 @@ static void sensor_telemetry(telemetry_args_t *args, telemetry_sock_t *telem) {
                     (struct iovec){.iov_base = &bodies[sensor_count].mass, .iov_len = sizeof(mass_p)};
 
                 sensor_count++;
+            }
+        }
+#endif
+
+#if defined(CONFIG_SENSORS_MCP9600)
+
+        for (int i = 0; i < arr_len(sensor_temp); i++) {
+            if (sensor_temp[i].available) {
+                err = sensor_temp_fetch(&sensor_temp[i]);
+                if (err < 0) {
+                    herr("Error fetching temperature topic %d: %d\n", sensor_temp[i].topic, err);
+                } else {
+                    headers[sensor_count] = (header_p){.type = TYPE_TELEM, .subtype = TELEM_TEMP};
+                    bodies[sensor_count].temp = (temp_p){.time = time_ms,
+                                                         .id = sensor_temp[i].sensor_id,
+                                                         .temperature = sensor_temp[i].data.temperature * 1000};
+                    pkt[sensor_count * 2] =
+                        (struct iovec){.iov_base = &headers[sensor_count], .iov_len = sizeof(headers[sensor_count])};
+                    pkt[sensor_count * 2 + 1] =
+                        (struct iovec){.iov_base = &bodies[sensor_count].temp, .iov_len = sizeof(temp_p)};
+
+                    sensor_count++;
+                }
             }
         }
 #endif
