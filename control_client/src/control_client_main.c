@@ -33,6 +33,8 @@
 #define DEBOUNCE_MS 30
 #define DEBOUNCE_US (DEBOUNCE_MS * 1000)
 
+#define VALVE_ARMING_SWITCH_IDX 16
+
 #define array_len(arr) (sizeof(arr) / sizeof(arr[0]))
 
 typedef struct {
@@ -373,11 +375,26 @@ int main(int argc, char **argv) {
                         continue;
                     }
 
+                    close(fd); /* Done with GPIO */
+
+                    /* Negate the value, since HIGH (1) means off/switch open (we're using pull-up resistors) */
+
+                    value = !value;
+
                     /* If the new value is the same as the switch state, do nothing.
                      *`value` is negated because the switches use a pull-up resistor.  */
 
-                    if (!value == switches[i].state) {
-                        close(fd);
+                    if (value == switches[i].state) {
+                        continue;
+                    }
+
+                    /* If the 'ARMED_IGNITION' switch is being turned off, but we're not 'ARMED_VALVES' already (key in
+                     * the slot), then don't send its command. Otherwise, this would send a request for 'ARMED_VALVES'
+                     * without the arming key being needed, which is privilege escalation. */
+
+                    bool turning_off_ignition =
+                        switches[i].kind == CNTRL_ARM_REQ && switches[i].act_id == ARMED_IGNITION && !value;
+                    if (turning_off_ignition && !switches[VALVE_ARMING_SWITCH_IDX].state) {
                         continue;
                     }
 
@@ -385,7 +402,7 @@ int main(int argc, char **argv) {
                      * resistor. When open circuit (off), the switch is high. When closed circuit (on) the switch is
                      * pulled low. */
 
-                    err = switch_callback(&switches[i], &pad, !value);
+                    err = switch_callback(&switches[i], &pad, value);
 
                     /* Print a helpful error message */
 
@@ -410,11 +427,8 @@ int main(int argc, char **argv) {
                     if (err == ENOTCONN || err == ENOTCONN || err == ECONNABORTED || err == ECONNREFUSED) {
                         /* Try to re-connect */
                         pad_disconnect(&pad); /* Close socket with the pad since it was destroyed anyways */
-                        close(fd);            /* Close GPIO */
                         goto reconnect;
                     }
-
-                    close(fd); /* Everything went nominally, close and continue with the rest of the GPIO */
                 }
             }
 #endif
