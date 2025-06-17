@@ -512,44 +512,69 @@ void *telemetry_run(void *arg) {
  * @param sock the telemetry socket
  */
 void telemetry_send_padstate(padstate_t *state, telemetry_sock_t *sock) {
+
     assert(state != NULL);
     assert(sock != NULL);
 
     struct timespec time;
-    clock_gettime(CLOCK_MONOTONIC, &time);
-    uint32_t time_ms = time.tv_sec * 1000 + time.tv_nsec / 1000000;
+    uint32_t time_ms;
+    header_p arm_hdr;
+    header_p conn_hdr;
+    arm_state_p arm_body;
+    conn_status_p conn_body;
+    header_p headers[NUM_ACTUATORS];
+    act_state_p bodies[NUM_ACTUATORS];
+    bool act_state;
 
-    struct iovec pkt[(1 + NUM_ACTUATORS) * 2];
+    /* One packet per actuator
+     * + one packet for the arming state
+     * + one packet for the connection state.
+     *
+     * All multiplied by 2 because there is a header and a body for each.
+     */
 
+    struct iovec pkt[(NUM_ACTUATORS + 2) * 2];
     struct msghdr msg = {
         .msg_iov = pkt,
         .msg_iovlen = (sizeof(pkt) / sizeof(struct iovec)),
     };
 
-    /* Send arming update */
+    /* Get the current time and convert it to milliseconds */
 
-    arm_lvl_e arm_lvl = padstate_get_level(state);
-    arm_state_p arm_body = {.time = time_ms, .state = arm_lvl};
-    header_p arm_hdr = (header_p){.type = TYPE_TELEM, .subtype = TELEM_ARM};
+    clock_gettime(CLOCK_MONOTONIC, &time);
+    time_ms = time.tv_sec * 1000 + time.tv_nsec / 1000000;
+
+    /* Construct packets for arming level and for connection status */
+
+    packet_header_init(&arm_hdr, TYPE_TELEM, TELEM_ARM);
+    packet_arm_state_init(&arm_body, time_ms, padstate_get_level(state));
+    packet_header_init(&conn_hdr, TYPE_TELEM, TELEM_CONN);
+    packet_conn_init(&conn_body, time_ms, padstate_get_connstatus(state));
+
+    /* Arming state packet */
 
     pkt[0] = (struct iovec){.iov_base = &arm_hdr, .iov_len = sizeof(arm_hdr)};
     pkt[1] = (struct iovec){.iov_base = &arm_body, .iov_len = sizeof(arm_body)};
 
+    /* Connection state packet */
+
+    pkt[2] = (struct iovec){.iov_base = &conn_hdr, .iov_len = sizeof(conn_hdr)};
+    pkt[3] = (struct iovec){.iov_base = &conn_body, .iov_len = sizeof(conn_body)};
+
     /* Send actuator updates */
 
-    header_p headers[NUM_ACTUATORS];
-    act_state_p bodies[NUM_ACTUATORS];
-
     for (int i = 0; i < NUM_ACTUATORS; i++) {
-        // Store the data in the arrays
-        headers[i] = (header_p){.type = TYPE_TELEM, .subtype = TELEM_ACT};
-        bool act_state;
-        padstate_get_actstate(state, i, &act_state);
-        bodies[i] = (act_state_p){.time = time_ms, .id = i, .state = act_state};
 
-        // Point to the stored data
-        pkt[(1 + i) * 2] = (struct iovec){.iov_base = &headers[i], .iov_len = sizeof(header_p)};
-        pkt[(1 + i) * 2 + 1] = (struct iovec){.iov_base = &bodies[i], .iov_len = sizeof(act_state_p)};
+        /* Store the data in the arrays */
+
+        packet_header_init(&headers[i], TYPE_TELEM, TELEM_ACT);
+        padstate_get_actstate(state, i, &act_state);
+        packet_act_state_init(&bodies[i], i, time_ms, act_state);
+
+        /* Point to the stored data in the iovecs */
+
+        pkt[(3 + i) * 2] = (struct iovec){.iov_base = &headers[i], .iov_len = sizeof(headers[i])};
+        pkt[(3 + i) * 2 + 1] = (struct iovec){.iov_base = &bodies[i], .iov_len = sizeof(bodies[i])};
     }
 
     telemetry_publish(sock, &msg);

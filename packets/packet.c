@@ -83,6 +83,11 @@ void packet_continuity_state_init(continuity_state_p *p, uint32_t time, continui
     p->state = (uint8_t)state;
 }
 
+void packet_conn_init(conn_status_p *p, uint32_t time, conn_status_e status) {
+    p->time = time;
+    p->status = (uint8_t)status;
+}
+
 const char *arm_state_str(arm_lvl_e state) { return ARMING_STR[state]; }
 
 const char *warning_str(warn_type_e warning) { return WARNING_STR[warning]; }

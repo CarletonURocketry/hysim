@@ -64,6 +64,7 @@ void padstate_init(padstate_t *state) {
     pthread_rwlock_init(&state->rw_lock, NULL);
 
     state->arm_level = ARMED_PAD;
+    state->conn_status = CONN_RECONNECTING; /* We are attempting to connect on start-up */
 
     /* Initialize all actuators */
 
@@ -99,6 +100,22 @@ arm_lvl_e padstate_get_level(padstate_t *state) {
 }
 
 /*
+ * Get the connection status of the control client to the pad server.
+ * @param state The pad state to get the connection status from
+ * @return The connection status, or -1 on failure.
+ */
+conn_status_e padstate_get_connstatus(padstate_t *state) {
+    conn_status_e status = -1;
+
+    if (pthread_rwlock_rdlock(&state->rw_lock) != 0) {
+        return status;
+    }
+    status = state->conn_status;
+    pthread_rwlock_unlock(&state->rw_lock);
+    return status;
+}
+
+/*
  * Signal an update of the state.
  * @param state The pad state to signal an update for.
  * @return 0 on success, errno code on failure
@@ -120,7 +137,6 @@ int padstate_signal_update(padstate_t *state) {
  * Attempt to change arming level.
  * @param state The current state of the pad server.
  * @param new_arm The new arming level to attempt to change to.
- * @param cmd_src The source of the command, as a cntrl_subtype_e.
  * @return ARM_OK for success, ARM_INV or ARM_DENIED for invalid or out of order arming state.
  */
 int padstate_change_level(padstate_t *state, arm_lvl_e new_arm) {
@@ -164,6 +180,31 @@ int padstate_change_level(padstate_t *state, arm_lvl_e new_arm) {
     }
 
     /* Unlock state now that new arming level has been decided */
+
+    pthread_rwlock_unlock(&state->rw_lock);
+
+    /* Signal an update in state */
+
+    padstate_signal_update(state);
+
+    return ARM_OK;
+}
+
+/* Set the current connection status
+ * @param state The current state of the pad server.
+ * @param new_status The new connection status to use.
+ */
+int padstate_set_connstatus(padstate_t *state, conn_status_e new_status) {
+    int err;
+
+    /* Get write access to the pad state */
+
+    err = pthread_rwlock_wrlock(&state->rw_lock);
+    if (err) return err;
+
+    state->conn_status = new_status;
+
+    /* Unlock state now that status is set */
 
     pthread_rwlock_unlock(&state->rw_lock);
 

@@ -21,6 +21,7 @@
 typedef struct {
     actuator_t actuators[NUM_ACTUATORS];
     arm_lvl_e arm_level;
+    conn_status_e conn_status;
     pthread_rwlock_t rw_lock;
     pthread_mutex_t update_mut;
     pthread_cond_t update_cond;
@@ -29,6 +30,8 @@ typedef struct {
 
 void padstate_init(padstate_t *state);
 arm_lvl_e padstate_get_level(padstate_t *state);
+conn_status_e padstate_get_connstatus(padstate_t *state);
+int padstate_set_connstatus(padstate_t *state, conn_status_e new_status);
 int padstate_get_actstate(padstate_t *state, uint8_t act_id, bool *act_val);
 int padstate_signal_update(padstate_t *state);
 int padstate_change_level(padstate_t *state, arm_lvl_e new_arm);

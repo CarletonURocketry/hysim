@@ -298,6 +298,7 @@ void *controller_run(void *arg) {
             continue;
         }
 
+        padstate_set_connstatus(args->state, CONN_CONNECTED);
         printf("Controller connected!\n");
 
         /* Receive messages */
@@ -334,6 +335,7 @@ void *controller_run(void *arg) {
             if (bread <= 0) {
                 hinfo("Re-initializing connection.\n");
                 controller_client_disconnect(&controller);
+                padstate_set_connstatus(args->state, CONN_RECONNECTING);
                 break;
             }
 
