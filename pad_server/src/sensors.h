@@ -51,8 +51,8 @@ int adc_sensor_val_conversion(adc_channel_t *channel, int32_t adc_val, int32_t *
 
 #endif
 typedef struct {
-    const struct orb_metadata *imu_meta;
-    int imu;
+    const struct orb_metadata *orb_meta;
+    int fd;
     long zero_point;       /* Zero point of the sensor */
     long known_mass_grams; /* Calibration weight in grams */
     long known_mass_point; /* Calibration weight value */
@@ -63,6 +63,21 @@ typedef struct {
 int sensor_mass_init(sensor_mass_t *sensor_mass);
 int sensor_mass_calibrate(sensor_mass_t *sensor_mass);
 int sensor_mass_fetch(sensor_mass_t *sensor_mass);
+
+#endif
+
+#ifdef CONFIG_SENSORS_MCP9600
+typedef struct {
+    const struct orb_metadata *orb_meta;
+    int fd;
+    int topic;
+    int sensor_id;
+    struct sensor_temp data;
+    bool available;
+} sensor_temp_t;
+
+int sensor_temp_init(sensor_temp_t *sensor_temp);
+int sensor_temp_fetch(sensor_temp_t *sensor_temp);
 
 #endif
 
