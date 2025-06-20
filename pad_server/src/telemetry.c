@@ -573,8 +573,8 @@ void telemetry_send_padstate(padstate_t *state, telemetry_sock_t *sock) {
 
         /* Point to the stored data in the iovecs */
 
-        pkt[(3 + i) * 2] = (struct iovec){.iov_base = &headers[i], .iov_len = sizeof(headers[i])};
-        pkt[(3 + i) * 2 + 1] = (struct iovec){.iov_base = &bodies[i], .iov_len = sizeof(bodies[i])};
+        pkt[4 + (i * 2)] = (struct iovec){.iov_base = &headers[i], .iov_len = sizeof(headers[i])};
+        pkt[4 + (i * 2) + 1] = (struct iovec){.iov_base = &bodies[i], .iov_len = sizeof(bodies[i])};
     }
 
     telemetry_publish(sock, &msg);
