@@ -322,7 +322,7 @@ void *controller_run(void *arg) {
                         herr("Lost connection with controller!\n");
                     }
 
-                    break;
+                    break; /* Exit read loop */
                 } else if (bread == 0) {
                     herr("Control box disconnected.\n");
                     break;
@@ -336,7 +336,7 @@ void *controller_run(void *arg) {
                 hinfo("Re-initializing connection.\n");
                 controller_client_disconnect(&controller);
                 padstate_set_connstatus(args->state, CONN_RECONNECTING);
-                break;
+                break; /* Exit main receive loop */
             }
 
             switch ((packet_type_e)hdr.type) {
