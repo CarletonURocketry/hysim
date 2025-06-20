@@ -38,6 +38,7 @@ typedef enum {
     TELEM_ACT = 5,      /* Actuator state */
     TELEM_WARN = 6,     /* Warning message */
     TELEM_CONT = 7,     /* Continuity measurement */
+    TELEM_CONN = 8,     /* Connection status */
 } telem_subtype_e;
 
 /* CONTROL MESSAGES */
@@ -153,6 +154,18 @@ typedef enum {
     CONTINUITY_HIGH = 1, /* Continuity sensor is reading high, circuit is cloesed. */
 } continuity_state_e;
 
+/* Connection status message */
+typedef struct {
+    uint32_t time;  /* Time stamp in milliseconds since power on. */
+    uint8_t status; /* The current status of the control client connection */
+} PACKED conn_status_p;
+
+typedef enum {
+    CONN_CONNECTED = 0,    /* The control client is connected */
+    CONN_RECONNECTING = 1, /* Re-connection to the control client being attempted */
+    CONN_DISCONNECTED = 2, /* Control client disconnected, re-connect failed */
+} conn_status_e;
+
 /* PACKET HEADERS */
 
 void packet_header_init(header_p *hdr, packet_type_e type, uint8_t subtype);
@@ -174,6 +187,7 @@ void packet_arm_state_init(arm_state_p *p, uint32_t time, arm_lvl_e state);
 void packet_act_state_init(act_state_p *p, uint8_t id, uint32_t time, bool state);
 void packet_warn_init(warn_p *p, uint32_t time, warn_type_e type);
 void packet_continuity_state_init(continuity_state_p *p, uint32_t time, continuity_state_e state);
+void packet_conn_init(conn_status_p *p, uint32_t time, conn_status_e status);
 
 const char *warning_str(warn_type_e warning);
 const char *arm_state_str(arm_lvl_e state);
