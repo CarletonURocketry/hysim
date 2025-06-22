@@ -1,0 +1,36 @@
+This is a collection of simulations that are meant to emulate the hybrid control system on a desktop computer over any network.
+
+This will allow acceptance testing of the system by propulsion members without first deploying the system. This also permits testing during development of application level logic that is built on top of the POSIX layer, such as TCP socket connections and messages, FSM logic for arming states and actuators and telemetry display and logging.\hypertarget{md_README_autotoc_md46}{}\doxysection{Simulations}\label{md_README_autotoc_md46}
+
+\begin{DoxyItemize}
+\item \mbox{\hyperlink{md_telem_client_README}{Telemetry Client}}
+\item \mbox{\hyperlink{md_control_client_README}{Control Client}}
+\item \mbox{\hyperlink{md_pad_server_README}{Pad Server}}
+\end{DoxyItemize}\hypertarget{md_README_autotoc_md47}{}\doxysection{Building}\label{md_README_autotoc_md47}
+To build the simulations, run {\ttfamily make all} in the project directory.\hypertarget{md_README_autotoc_md48}{}\doxysection{Usage}\label{md_README_autotoc_md48}
+To figure out how to use each of the simulations, run the compiled binary to the simulation with the help flag\+: {\ttfamily -\/h}. This will print the help text.
+
+You must always run the Pad Server simulation and one of the client simulations in order to emulate a system or part of a system.
+
+In console window \#1\+:
+
+
+\begin{DoxyCode}{0}
+\DoxyCodeLine{\$ pad/pad}
+
+\end{DoxyCode}
+
+
+In console window \#2\+:
+
+
+\begin{DoxyCode}{0}
+\DoxyCodeLine{\$ control\_client/control}
+
+\end{DoxyCode}
+\hypertarget{md_README_autotoc_md49}{}\doxysection{Running with Docker}\label{md_README_autotoc_md49}
+If you have Docker installed, you can run simulations within a Docker container.
+
+To build the image run {\ttfamily docker build . -\/t hysim}.
+
+In order to be able to receive data over TCP/\+UDP sockets, we have to manually expose the port when creating the container. To create a container with the exposed port for telemetry data, run {\ttfamily docker run -\/it -\/p 50002\+:50002 hysim} 

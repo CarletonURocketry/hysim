@@ -1,0 +1,5 @@
+/* Resize to fix larger logo - formerly 335px x 120px */
+html {
+    --side-nav-fixed-width: 350px; 
+    --top-height: 150px;
+}

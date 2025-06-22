@@ -1,3 +1,7 @@
+# Documentation
+/docs/html
+*.pinfo
+
 # Build artifacts
 *.o
 
