@@ -165,8 +165,9 @@ int padstate_change_level(padstate_t *state, arm_lvl_e new_arm) {
      * disconnected or armed for launch */
 
     bool lvl_decrease_from_firing_sequence =
-        new_arm == ARMED_PAD && (state->arm_level == ARMED_VALVES || state->arm_level == ARMED_IGNITION ||
-                                 state->arm_level == ARMED_DISCONNECTED || state->arm_level == ARMED_LAUNCH);
+        (new_arm == ARMED_VALVES && (state->arm_level == ARMED_IGNITION || state->arm_level == ARMED_DISCONNECTED ||
+                                     state->arm_level == ARMED_LAUNCH)) ||
+        new_arm == ARMED_PAD;
 
     /* If any of these cases are true, we can perform the change */
 
