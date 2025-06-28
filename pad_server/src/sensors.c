@@ -175,7 +175,7 @@ int adc_sensor_val_conversion(adc_channel_t *channel, int32_t adc_val, int32_t *
             *output_val = 0;
             break;
         }
-        *output_val = map_value(sensor_voltage, 0, 5.0, 0.0, 11120.5);
+        *output_val = map_value(sensor_voltage, 0, 5.053, 0.0, 11120.5);
         hinfo("Mass #%d: %ld N\n", channel->sensor_id, *output_val);
     } break;
 
