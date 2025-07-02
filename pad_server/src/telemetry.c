@@ -345,8 +345,7 @@ static void sensor_telemetry(telemetry_args_t *args, telemetry_sock_t *telem) {
         int sensor_count = 0;
 
         struct timespec time_t;
-        clock_gettime(CLOCK_MONOTONIC, &time_t);
-        uint32_t time_ms = time_t.tv_sec * 1000 + time_t.tv_nsec / 1000000;
+        uint32_t time_ms;
 
         header_p headers[32];
         union {
@@ -388,6 +387,11 @@ static void sensor_telemetry(telemetry_args_t *args, telemetry_sock_t *telem) {
                 headers[sensor_count] = (header_p){.type = TYPE_TELEM, .subtype = channel->type};
                 pkt[sensor_count * 2] =
                     (struct iovec){.iov_base = &headers[sensor_count], .iov_len = sizeof(headers[sensor_count])};
+
+                /* Get an exact time stamp */
+
+                clock_gettime(CLOCK_MONOTONIC, &time_t);
+                time_ms = time_t.tv_sec * 1000 + time_t.tv_nsec / 1000000;
 
                 switch (channel->type) {
                 case TELEM_PRESSURE:
@@ -436,6 +440,7 @@ static void sensor_telemetry(telemetry_args_t *args, telemetry_sock_t *telem) {
                 float slope = (float)sensor_mass.known_mass_grams /
                               (float)(sensor_mass.known_mass_point - sensor_mass.zero_point);
                 int32_t output = (int32_t)((sensor_mass.data.force - sensor_mass.zero_point) * slope);
+                time_ms = sensor_mass.data.timestamp / 1000;
                 bodies[sensor_count].mass = (mass_p){.time = time_ms, .id = 0, .mass = output};
                 pkt[sensor_count * 2] =
                     (struct iovec){.iov_base = &headers[sensor_count], .iov_len = sizeof(headers[sensor_count])};
@@ -451,21 +456,24 @@ static void sensor_telemetry(telemetry_args_t *args, telemetry_sock_t *telem) {
 
         for (int i = 0; i < arr_len(sensor_temp); i++) {
             if (sensor_temp[i].available) {
+
                 err = sensor_temp_fetch(&sensor_temp[i]);
                 if (err < 0) {
                     herr("Error fetching temperature topic %d: %d\n", sensor_temp[i].topic, err);
-                } else {
-                    headers[sensor_count] = (header_p){.type = TYPE_TELEM, .subtype = TELEM_TEMP};
-                    bodies[sensor_count].temp = (temp_p){.time = time_ms,
-                                                         .id = sensor_temp[i].sensor_id,
-                                                         .temperature = sensor_temp[i].data.temperature * 1000};
-                    pkt[sensor_count * 2] =
-                        (struct iovec){.iov_base = &headers[sensor_count], .iov_len = sizeof(headers[sensor_count])};
-                    pkt[sensor_count * 2 + 1] =
-                        (struct iovec){.iov_base = &bodies[sensor_count].temp, .iov_len = sizeof(temp_p)};
-
-                    sensor_count++;
+                    continue;
                 }
+
+                time_ms = sensor_temp[i].data.timestamp / 1000;
+                headers[sensor_count] = (header_p){.type = TYPE_TELEM, .subtype = TELEM_TEMP};
+                bodies[sensor_count].temp = (temp_p){.time = time_ms,
+                                                     .id = sensor_temp[i].sensor_id,
+                                                     .temperature = sensor_temp[i].data.temperature * 1000};
+                pkt[sensor_count * 2] =
+                    (struct iovec){.iov_base = &headers[sensor_count], .iov_len = sizeof(headers[sensor_count])};
+                pkt[sensor_count * 2 + 1] =
+                    (struct iovec){.iov_base = &bodies[sensor_count].temp, .iov_len = sizeof(temp_p)};
+
+                sensor_count++;
             }
         }
 #endif
