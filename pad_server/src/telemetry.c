@@ -296,7 +296,7 @@ static void sensor_telemetry(telemetry_args_t *args, telemetry_sock_t *telem) {
                     {.channel_num = 4, .sensor_id = 0, .type = TELEM_TEMP},
                     {.channel_num = 5, .sensor_id = 1, .type = TELEM_TEMP},
                     {.channel_num = 6, .sensor_id = 4, .type = TELEM_PRESSURE},
-                    {.channel_num = 7, .sensor_id = 5, .type = TELEM_PRESSURE},
+                    {.channel_num = 7, .sensor_id = 2, .type = TELEM_PRESSURE},
                 },
         },
         {
@@ -308,7 +308,7 @@ static void sensor_telemetry(telemetry_args_t *args, telemetry_sock_t *telem) {
                 {
                     {.channel_num = 4, .sensor_id = 0, .type = TELEM_PRESSURE},
                     {.channel_num = 5, .sensor_id = 1, .type = TELEM_PRESSURE},
-                    {.channel_num = 6, .sensor_id = 2, .type = TELEM_PRESSURE},
+                    {.channel_num = 6, .sensor_id = 5, .type = TELEM_PRESSURE},
                     {.channel_num = 7, .sensor_id = 3, .type = TELEM_PRESSURE},
                 },
         },
