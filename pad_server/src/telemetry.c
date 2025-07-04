@@ -360,23 +360,40 @@ static void sensor_telemetry(telemetry_args_t *args, telemetry_sock_t *telem) {
         struct adc_msg_s sample;
         adc_channel_t *channel;
 
-        for (int i = 0; i < arr_len(adc_devices); i++) {
+        for (int j = 0; j < 4; j++) {
+            for (int i = 0; i < arr_len(adc_devices); i++) {
+                if (adc_devices[i].fd < 0) {
+                    continue;
+                }
 
-            if (adc_devices[i].fd < 0) {
-                continue;
-            }
-
-            for (int j = 0; j < adc_devices[i].n_channels; j++) {
+                if (j >= adc_devices[i].n_channels) {
+                    continue;
+                }
 
                 channel = &adc_devices[i].channels[j];
-
-                /* Read specifically the channel of interest */
-
                 sample.am_channel = channel->channel_num;
-                err = ioctl(adc_devices[i].fd, ANIOC_ADS1115_READ_CHANNEL, &sample);
+                err = ioctl(adc_devices[i].fd, ANIOC_ADS1115_TRIGGER_CONVERSION, &sample);
+                if (err < 0) {
+                    herr("Couldn't trigger ADC channel %d: %d\n", i, errno);
+                    continue;
+                }
+            }
+
+            for (int i = 0; i < arr_len(adc_devices); i++) {
+                if (adc_devices[i].fd < 0) {
+                    continue;
+                }
+
+                if (j >= adc_devices[i].n_channels) {
+                    continue;
+                }
+
+                channel = &adc_devices[i].channels[j];
+                sample.am_channel = channel->channel_num;
+                err = ioctl(adc_devices[i].fd, ANIOC_ADS1115_READ_CHANNEL_NO_CONVERSION, &sample);
                 if (err < 0) {
                     herr("Couldn't read ADC channel %d: %d\n", i, errno);
-                    continue; /* Skip channels with errors */
+                    continue;
                 }
 
                 /* For each channel of data we find the corresponding information */
