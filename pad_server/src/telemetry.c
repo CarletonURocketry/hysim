@@ -338,16 +338,14 @@ static void sensor_telemetry(telemetry_args_t *args, telemetry_sock_t *telem) {
 #endif
 
     for (;;) {
-
-        /* We hopefully won't go beyond 32 sensors */
-
-        struct iovec pkt[(32) * 2];
+        struct iovec pkt[(32) * 2]; /* 32 possible measurements, headers and bodies */
         int sensor_count = 0;
-
         struct timespec time_t;
         uint32_t time_ms;
-
         header_p headers[32];
+
+        /* All possible sensor bodies */
+
         union {
             pressure_p pressure;
             mass_p mass;
@@ -360,38 +358,77 @@ static void sensor_telemetry(telemetry_args_t *args, telemetry_sock_t *telem) {
         struct adc_msg_s sample;
         adc_channel_t *channel;
 
-        for (int i = 0; i < arr_len(adc_devices); i++) {
+        /* For each of the possible 4 channels an ADS1115 ADC can have, we loop */
 
-            if (adc_devices[i].fd < 0) {
-                continue;
-            }
+        for (int j = 0; j < 4; j++) {
 
-            for (int j = 0; j < adc_devices[i].n_channels; j++) {
+            /* For each ADC, we loop and we trigger a conversion on their `j`th channel */
 
-                channel = &adc_devices[i].channels[j];
+            for (int i = 0; i < arr_len(adc_devices); i++) {
 
-                /* Read specifically the channel of interest */
+                /* If this ADC has an invalid file descriptor, skip it.
+                 * If the ADC does not have a `j`th channel, skip it.
+                 */
 
-                sample.am_channel = channel->channel_num;
-                err = ioctl(adc_devices[i].fd, ANIOC_ADS1115_READ_CHANNEL, &sample);
-                if (err < 0) {
-                    herr("Couldn't read ADC channel %d: %d\n", i, errno);
-                    continue; /* Skip channels with errors */
+                if (adc_devices[i].fd < 0 || j >= adc_devices[i].n_channels) {
+                    continue;
                 }
 
-                /* For each channel of data we find the corresponding information */
+                /* We have a valid ADC with a channel `j`. Trigger a conversion on this channel for this ADC */
 
-                int32_t sensor_val = 0;
-                err = adc_sensor_val_conversion(channel, sample.am_data, &sensor_val);
+                channel = &adc_devices[i].channels[j];
+                sample.am_channel = channel->channel_num;
 
-                headers[sensor_count] = (header_p){.type = TYPE_TELEM, .subtype = channel->type};
-                pkt[sensor_count * 2] =
-                    (struct iovec){.iov_base = &headers[sensor_count], .iov_len = sizeof(headers[sensor_count])};
+                err = ioctl(adc_devices[i].fd, ANIOC_ADS1115_TRIGGER_CONVERSION, &sample);
+                if (err) {
+                    herr("Couldn't trigger ADC channel %d: %d\n", channel->channel_num, errno);
+                    continue;
+                }
+            }
 
-                /* Get an exact time stamp */
+            /* Now, for each ADC again, get the completed conversion result from channel `j` and put it in the packet.
+             */
+
+            for (int i = 0; i < arr_len(adc_devices); i++) {
+
+                /* If this ADC has an invalid file descriptor, skip it.
+                 * If the ADC does not have a `j`th channel, skip it.
+                 */
+
+                if (adc_devices[i].fd < 0 || j >= adc_devices[i].n_channels) {
+                    continue;
+                }
+
+                channel = &adc_devices[i].channels[j];
+                sample.am_channel = channel->channel_num;
+                err = ioctl(adc_devices[i].fd, ANIOC_ADS1115_READ_CHANNEL_NO_CONVERSION, &sample);
+
+                if (err) {
+                    herr("Couldn't read ADC channel %d: %d\n", channel->channel_num, errno);
+                    continue;
+                }
+
+                /* Get an exact time stamp for the data body */
 
                 clock_gettime(CLOCK_MONOTONIC, &time_t);
                 time_ms = time_t.tv_sec * 1000 + time_t.tv_nsec / 1000000;
+
+                /* Now that we have the voltage from the ADC, convert it to a real measurement. */
+
+                int32_t sensor_val = 0;
+                err = adc_sensor_val_conversion(channel, sample.am_data, &sensor_val);
+                if (err) {
+                    herr("Couldn't convert value from ADC channel %d: %d\n", i, err);
+                    continue;
+                }
+
+                /* Put the converted value in the packet */
+
+                headers[sensor_count] = (header_p){.type = TYPE_TELEM, .subtype = channel->type};
+                pkt[sensor_count * 2] = (struct iovec){
+                    .iov_base = &headers[sensor_count],
+                    .iov_len = sizeof(headers[sensor_count]),
+                };
 
                 switch (channel->type) {
                 case TELEM_PRESSURE:
@@ -465,28 +502,31 @@ static void sensor_telemetry(telemetry_args_t *args, telemetry_sock_t *telem) {
 
                 time_ms = sensor_temp[i].data.timestamp / 1000;
                 headers[sensor_count] = (header_p){.type = TYPE_TELEM, .subtype = TELEM_TEMP};
-                bodies[sensor_count].temp = (temp_p){.time = time_ms,
-                                                     .id = sensor_temp[i].sensor_id,
-                                                     .temperature = sensor_temp[i].data.temperature * 1000};
-                pkt[sensor_count * 2] =
-                    (struct iovec){.iov_base = &headers[sensor_count], .iov_len = sizeof(headers[sensor_count])};
-                pkt[sensor_count * 2 + 1] =
-                    (struct iovec){.iov_base = &bodies[sensor_count].temp, .iov_len = sizeof(temp_p)};
-
+                bodies[sensor_count].temp = (temp_p){
+                    .time = time_ms,
+                    .id = sensor_temp[i].sensor_id,
+                    .temperature = sensor_temp[i].data.temperature * 1000,
+                };
+                pkt[sensor_count * 2] = (struct iovec){
+                    .iov_base = &headers[sensor_count],
+                    .iov_len = sizeof(headers[sensor_count]),
+                };
+                pkt[sensor_count * 2 + 1] = (struct iovec){
+                    .iov_base = &bodies[sensor_count].temp,
+                    .iov_len = sizeof(temp_p),
+                };
                 sensor_count++;
             }
         }
 #endif
 
+        /* Send the telemetry that was collected */
+
         if (sensor_count > 0) {
-            struct msghdr msg = {
-                .msg_iov = pkt,
-                .msg_iovlen = sensor_count * 2,
-            };
+            struct msghdr msg = {.msg_iov = pkt, .msg_iovlen = sensor_count * 2};
             telemetry_publish(telem, &msg);
         } else {
             herr("No sensor data to send\n");
-            usleep(1000000);
         }
     }
 }
