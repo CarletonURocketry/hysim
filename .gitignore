@@ -7,3 +7,7 @@ Make.dep
 .kconfig
 /Kconfig
 *.built
+
+# Dev tools
+compile_commands.json
+.cache/
