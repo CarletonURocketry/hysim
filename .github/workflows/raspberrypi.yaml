@@ -4,21 +4,19 @@ on:
   push:
     branches:
       main
+  release:
+    types: [published]
 
 jobs:
   compile:
     runs-on: ubuntu-22.04
     steps:
-    - name: Find latest commit for pico sdk
-      run: |
-        PICO_SDK_COMMIT=$(git ls-remote https://github.com/raspberrypi/pico-sdk.git refs/heads/master | cut -f 1)
-        echo "PICO_SDK_COMMIT=$PICO_SDK_COMMIT" >> $GITHUB_ENV
     - name: Load cache
       id: pico-sdk-cache
       uses: actions/cache@v4
       with:
         path: pico-sdk
-        key: ${{ runner.os }}-pico-sdk-${{ env.PICO_SDK_COMMIT }}
+        key: ${{ runner.os }}-pico-sdk-2.0.0
     - name: Clone Pico SDK
       if: steps.pico-sdk-cache.outputs.cache-hit != 'true'
       uses: actions/checkout@v4
@@ -26,17 +24,14 @@ jobs:
         token: ${{ github.token }}
         repository: raspberrypi/pico-sdk
         path: pico-sdk
+        ref: 2.0.0
 
-    - name: Find latest commit for pico tool
-      run: |
-        PICO_TOOL_COMMIT=$(git ls-remote https://github.com/raspberrypi/picotool.git refs/heads/master | cut -f 1)
-        echo "PICO_TOOL_COMMIT=$PICO_TOOL_COMMIT" >> $GITHUB_ENV
     - name: Load cache
       id: pico-tool-cache
       uses: actions/cache@v4
       with:
         path: pico-sdk/picotool
-        key: ${{ runner.os }}-pico-tool-${{ env.PICO_TOOL_COMMIT }}
+        key: ${{ runner.os }}-pico-tool-2.0.0
     - name: Clone Picotool
       if: steps.pico-tool-cache.outputs.cache-hit != 'true'
       uses: actions/checkout@v4
@@ -44,6 +39,7 @@ jobs:
         token: ${{ github.token }}
         repository: raspberrypi/picotool
         path: pico-sdk/picotool
+        ref: "2.0.0"
     - name: Install picotool dependencies
       if: steps.pico-tool-cache.outputs.cache-hit != 'true'
       run: |
@@ -113,7 +109,25 @@ jobs:
         token: ${{ github.token }}
         repository: CarletonURocketry/hybrid-pcc
         path: hybrid-pcc
-        
+
+    - name: Find latest commit for hybrid-mcc
+      run: |
+        HYBRID_MCC_COMMIT=$(git ls-remote https://github.com/CarletonURocketry/hybrid-mcc.git refs/heads/main | cut -f 1)
+        echo "HYBRID_MCC_COMMIT=$HYBRID_MCC_COMMIT" >> $GITHUB_ENV
+    - name: Load cache
+      id: hybrid-mcc-cache
+      uses: actions/cache@v4
+      with:
+        path: hybrid-mcc
+        key: ${{ runner.os }}-hybrid-mcc-${{ env.HYBRID_MCC_COMMIT }}   
+    - name: Clone hybrid-mcc
+      if: steps.hybrid-mcc-cache.outputs.cache-hit != 'true'
+      uses: actions/checkout@v4
+      with:
+        token: ${{ github.token }}
+        repository: CarletonURocketry/hybrid-mcc
+        path: hybrid-mcc
+
     - name: Clone hysim
       uses: actions/checkout@v4
       with:
@@ -130,18 +144,28 @@ jobs:
         libexpat1-dev gcc-multilib g++-multilib picocom u-boot-tools util-linux
         sudo apt -y install kconfig-frontends
         sudo apt -y install gcc-arm-none-eabi binutils-arm-none-eabi
-    - name: Compile for Raspberry pi
+    - name: Compile for PCC
       run: |
         cd nuttx
         export PICO_SDK_PATH=${{ github.workspace }}/pico-sdk
-        ./tools/configure.sh ../hybrid-pcc/configs/hybrid-control
+        make distclean
+        ./tools/configure.sh ../hybrid-pcc/configs/autoboot
         make -j 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
         path: nuttx/nuttx.uf2
-        name: nuttx_uf2
-      
-        
-        
+        name: nuttx_pcc_uf2
     
+    - name: Compile for MCC
+      run : | 
+        cd nuttx
+        export PICO_SDK_PATH=${{ github.workspace }}/pico-sdk
+        make distclean
+        ./tools/configure.sh ../hybrid-mcc/configs/autoboot
+        make -j 
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        path: nuttx/nuttx.uf2
+        name: nuttx_mcc_uf2
