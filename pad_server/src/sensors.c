@@ -180,7 +180,7 @@ int adc_sensor_val_conversion(adc_channel_t *channel, int32_t adc_val, int32_t *
     } break;
 
     case TELEM_CONT: {
-        if (sensor_voltage <= 2.5) { /* Threshold voltage to switch state*/
+        if (sensor_voltage <= 2) { /* Threshold voltage to switch state*/
             *output_val = 1;
         } else {
             *output_val = 0;

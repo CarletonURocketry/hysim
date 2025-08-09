@@ -320,7 +320,7 @@ static void sensor_telemetry(telemetry_args_t *args, telemetry_sock_t *telem) {
             .channels =
                 {
                     {.channel_num = 4, .sensor_id = 0, .type = TELEM_THRUST},
-                    {.channel_num = 6, .sensor_id = 1, .type = TELEM_CONT},
+                    {.channel_num = 7, .sensor_id = 1, .type = TELEM_CONT},
                 },
         },
     };
