@@ -107,6 +107,18 @@ int sensor_mass_init(sensor_mass_t *sensor_mass) {
         return -1;
     }
 
+    int err = orb_set_interval(sensor_mass->fd, 50000);
+    if (err < 0) {
+        return -1;
+    }
+
+    FAR unsigned mass_frequency;
+    err = orb_get_frequency(sensor_mass->fd, &mass_frequency);
+    if (err < 0) {
+        return -1;
+    }
+    hinfo("Mass sensor frequency set at %dHz\n", mass_frequency);
+
     return 0;
 }
 
