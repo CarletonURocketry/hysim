@@ -579,13 +579,15 @@ void *telemetry_run(void *arg) {
 
     hinfo("Starting mock telemetry\n");
     mock_telemetry(args, &telem);
-#elif !defined(CONFIG_HYSIM_PAD_SERVER_MOCK_DATA) && !defined(DESKTOP_BUILD)
+#elif !defined(CONFIG_HYSIM_PAD_SERVER_MOCK_DATA) && !defined(DESKTOP_BUILD) && !defined(CONFIG_HYSIM_PAD_SERVER_DISABLE_SENSOR_TELEMETRY)
 
     /* Start real telemetry if on NuttX and not mocking. */
 
     hinfo("Starting real telemetry\n");
     sensor_telemetry(args, &telem);
 #endif
+
+    pthread_join(telemetry_padstate_thread, NULL);
 
     nxfail("Telemetry thread exited");
     thread_return(0); // Normal return
