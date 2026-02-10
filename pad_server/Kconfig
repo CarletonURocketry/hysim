@@ -26,6 +26,12 @@ config HYSIM_PAD_SERVER_MOCK_DATA
         bool "Use mock data instead of real sensors"
         default n
 
+config HYSIM_PAD_SERVER_DISABLE_SENSOR_TELEMETRY
+        bool "Disable sensor telemetry thread"
+        default n
+        ---help---
+                Disable the sensor telemetry thread from starting.
+
 config HYSIM_PAD_SERVER_DEBUG
 		bool "Debug logging"
 		default n
