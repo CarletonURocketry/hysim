@@ -129,7 +129,7 @@ static void random_data(telemetry_sock_t *telem) {
 
         /* Get the current time */
 
-        clock_gettime(CLOCK_MONOTONIC, &time);
+        clock_gettime(CLOCK_REALTIME, &time);
         time_ms = time.tv_sec * 1000 + time.tv_nsec / 1000000;
 
         /* Send pressure transducer data for transducers 0 through 5 */
@@ -410,7 +410,7 @@ static void sensor_telemetry(telemetry_args_t *args, telemetry_sock_t *telem) {
 
                 /* Get an exact time stamp for the data body */
 
-                clock_gettime(CLOCK_MONOTONIC, &time_t);
+                clock_gettime(CLOCK_REALTIME, &time_t);
                 time_ms = time_t.tv_sec * 1000 + time_t.tv_nsec / 1000000;
 
                 /* Now that we have the voltage from the ADC, convert it to a real measurement. */
@@ -631,7 +631,7 @@ void telemetry_send_padstate(padstate_t *state, telemetry_sock_t *sock) {
 
     /* Get the current time and convert it to milliseconds */
 
-    clock_gettime(CLOCK_MONOTONIC, &time);
+    clock_gettime(CLOCK_REALTIME, &time);
     time_ms = time.tv_sec * 1000 + time.tv_nsec / 1000000;
 
     /* Construct packets for arming level and for connection status */

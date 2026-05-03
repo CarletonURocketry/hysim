@@ -28,6 +28,10 @@
 #include "netutils/netinit.h"
 #endif
 
+#if defined(CONFIG_NETUTILS_NTPCLIENT)
+#include "netutils/ntpclient.h"
+#endif
+
 #define CONTROL_THREAD_PRIORITY 200
 #define TELEM_THREAD_PRIORITY 100
 
@@ -128,6 +132,11 @@ static int usb_init(void) {
 }
 #endif
 
+#if defined(CONFIG_NETUTILS_NTPCLIENT)
+/* Starts the NTP server automatically*/
+static int ntp_init(void) { return ntpc_start(); }
+#endif
+
 /*
  * The pad server has two tasks:
  * - Handle requests from a single control input client to change arming states or actuate actuators
@@ -162,6 +171,13 @@ int main(int argc, char **argv) {
         return EXIT_FAILURE;
     }
     hinfo("USB shell started\n");
+#endif
+
+#if !defined(DESKTOP_BUILD) && defined(CONFIG_NETUTILS_NTPCLIENT)
+    if (ntp_init()) {
+        return EXIT_FAILURE;
+    }
+    hinfo("NTP client started\n");
 #endif
 
 #if defined(CONFIG_NSH_NETINIT) && !defined(CONFIG_SYSTEM_NSH)
