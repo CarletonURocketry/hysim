@@ -38,52 +38,52 @@ void packet_arm_ack_init(arm_ack_p *ack, arm_ack_status_e status) { ack->status 
 
 /* TELEMETRY MESSAGES */
 
-void packet_temp_init(temp_p *p, uint8_t id, uint32_t time, int32_t temperature) {
+void packet_temp_init(temp_p *p, uint8_t id, uint64_t time, int32_t temperature) {
     p->id = id;
     p->time = time;
     p->temperature = temperature;
 }
 
-void packet_pressure_init(pressure_p *p, uint8_t id, uint32_t time, int32_t pressure) {
+void packet_pressure_init(pressure_p *p, uint8_t id, uint64_t time, int32_t pressure) {
     p->id = id;
     p->time = time;
     p->pressure = pressure;
 }
 
-void packet_mass_init(mass_p *p, uint8_t id, uint32_t time, int32_t mass) {
+void packet_mass_init(mass_p *p, uint8_t id, uint64_t time, int32_t mass) {
     p->id = id;
     p->time = time;
     p->mass = mass;
 }
 
-void packet_thrust_init(thrust_p *p, uint8_t id, uint32_t time, uint32_t thrust) {
+void packet_thrust_init(thrust_p *p, uint8_t id, uint64_t time, uint32_t thrust) {
     p->id = id;
     p->time = time;
     p->thrust = thrust;
 }
 
-void packet_arm_state_init(arm_state_p *p, uint32_t time, arm_lvl_e state) {
+void packet_arm_state_init(arm_state_p *p, uint64_t time, arm_lvl_e state) {
     p->time = time;
     p->state = (uint8_t)state;
 }
 
-void packet_act_state_init(act_state_p *p, uint8_t id, uint32_t time, bool state) {
+void packet_act_state_init(act_state_p *p, uint8_t id, uint64_t time, bool state) {
     p->time = time;
     p->id = id;
     p->state = state ? 1 : 0;
 }
 
-void packet_warn_init(warn_p *p, uint32_t time, warn_type_e type) {
+void packet_warn_init(warn_p *p, uint64_t time, warn_type_e type) {
     p->time = time;
     p->type = (uint8_t)type;
 }
 
-void packet_continuity_state_init(continuity_state_p *p, uint32_t time, continuity_state_e state) {
+void packet_continuity_state_init(continuity_state_p *p, uint64_t time, continuity_state_e state) {
     p->time = time;
     p->state = (uint8_t)state;
 }
 
-void packet_conn_init(conn_status_p *p, uint32_t time, conn_status_e status) {
+void packet_conn_init(conn_status_p *p, uint64_t time, conn_status_e status) {
     p->time = time;
     p->status = (uint8_t)status;
 }

@@ -118,7 +118,7 @@ static void random_data(telemetry_sock_t *telem) {
     };
     header_p hdr;
     struct timespec time;
-    uint32_t time_ms;
+    uint64_t time_ms;
 
     /* Set up the header info for every message */
 
@@ -341,7 +341,7 @@ static void sensor_telemetry(telemetry_args_t *args, telemetry_sock_t *telem) {
         struct iovec pkt[(32) * 2]; /* 32 possible measurements, headers and bodies */
         int sensor_count = 0;
         struct timespec time_t;
-        uint32_t time_ms;
+        uint64_t time_ms;
         header_p headers[32];
 
         /* All possible sensor bodies */
@@ -607,7 +607,7 @@ void telemetry_send_padstate(padstate_t *state, telemetry_sock_t *sock) {
     assert(sock != NULL);
 
     struct timespec time;
-    uint32_t time_ms;
+    uint64_t time_ms;
     header_p arm_hdr;
     header_p conn_hdr;
     arm_state_p arm_body;

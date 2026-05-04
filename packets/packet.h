@@ -93,47 +93,47 @@ typedef enum {
 
 /* Temperature measurement message */
 typedef struct {
-    uint32_t time;       /* Time stamp in milliseconds since power on. */
+    uint64_t time;       /* Time stamp in milliseconds since power on. */
     int32_t temperature; /* Temperature in millidegrees Celsius. */
     uint8_t id;          /* The ID of the sensor which reported the measurement. */
 } PACKED temp_p;
 
 /* Pressure measurement message */
 typedef struct {
-    uint32_t time;    /* Time stamp in milliseconds since power on. */
+    uint64_t time;    /* Time stamp in milliseconds since power on. */
     int32_t pressure; /* Pressure in thousandths of a PSI. */
     uint8_t id;       /* The ID of the sensor which reported the measurement. */
 } PACKED pressure_p;
 
 /* Mass measurement message */
 typedef struct {
-    uint32_t time; /* Time stamp in milliseconds since power on. */
+    uint64_t time; /* Time stamp in milliseconds since power on. */
     int32_t mass;  /* Mass in grams. */
     uint8_t id;    /* The ID of the sensor which reported the measurement. */
 } PACKED mass_p;
 
 typedef struct {
-    uint32_t time;   /* Time stamp in milliseconds since power on. */
+    uint64_t time;   /* Time stamp in milliseconds since power on. */
     uint32_t thrust; /* Thrust in Newtons. */
     uint8_t id;      /* The ID of the sensor which reported the measurement. */
 } PACKED thrust_p;
 
 /* Arming state message */
 typedef struct {
-    uint32_t time; /* Time stamp in milliseconds since power on. */
+    uint64_t time; /* Time stamp in milliseconds since power on. */
     uint8_t state; /* The current arming state. */
 } PACKED arm_state_p;
 
 /* Actuator state message */
 typedef struct {
-    uint32_t time; /* Time stamp in milliseconds since power on. */
+    uint64_t time; /* Time stamp in milliseconds since power on. */
     uint8_t id;    /* The numerical ID of the actuator */
     uint8_t state; /* The current state of the actuator. */
 } PACKED act_state_p;
 
 /* Warning message */
 typedef struct {
-    uint32_t time; /* Time stamp in milliseconds since power on. */
+    uint64_t time; /* Time stamp in milliseconds since power on. */
     uint8_t type;  /* The type of warning. */
 } PACKED warn_p;
 
@@ -145,7 +145,7 @@ typedef enum {
 
 /* Continuity state message */
 typedef struct {
-    uint32_t time; /* Time stamp in milliseconds since power on. */
+    uint64_t time; /* Time stamp in milliseconds since power on. */
     uint8_t state; /* The current state of the continuity check. */
 } PACKED continuity_state_p;
 
@@ -156,7 +156,7 @@ typedef enum {
 
 /* Connection status message */
 typedef struct {
-    uint32_t time;  /* Time stamp in milliseconds since power on. */
+    uint64_t time;  /* Time stamp in milliseconds since power on. */
     uint8_t status; /* The current status of the control client connection */
 } PACKED conn_status_p;
 
@@ -179,15 +179,15 @@ void packet_arm_ack_init(arm_ack_p *ack, arm_ack_status_e status);
 
 /* TELEMETRY MESSAGES */
 
-void packet_temp_init(temp_p *p, uint8_t id, uint32_t time, int32_t temperature);
-void packet_pressure_init(pressure_p *p, uint8_t id, uint32_t time, int32_t pressure);
-void packet_mass_init(mass_p *p, uint8_t id, uint32_t time, int32_t mass);
-void packet_thrust_init(thrust_p *p, uint8_t id, uint32_t time, uint32_t thrust);
-void packet_arm_state_init(arm_state_p *p, uint32_t time, arm_lvl_e state);
-void packet_act_state_init(act_state_p *p, uint8_t id, uint32_t time, bool state);
-void packet_warn_init(warn_p *p, uint32_t time, warn_type_e type);
-void packet_continuity_state_init(continuity_state_p *p, uint32_t time, continuity_state_e state);
-void packet_conn_init(conn_status_p *p, uint32_t time, conn_status_e status);
+void packet_temp_init(temp_p *p, uint8_t id, uint64_t time, int32_t temperature);
+void packet_pressure_init(pressure_p *p, uint8_t id, uint64_t time, int32_t pressure);
+void packet_mass_init(mass_p *p, uint8_t id, uint64_t time, int32_t mass);
+void packet_thrust_init(thrust_p *p, uint8_t id, uint64_t time, uint32_t thrust);
+void packet_arm_state_init(arm_state_p *p, uint64_t time, arm_lvl_e state);
+void packet_act_state_init(act_state_p *p, uint8_t id, uint64_t time, bool state);
+void packet_warn_init(warn_p *p, uint64_t time, warn_type_e type);
+void packet_continuity_state_init(continuity_state_p *p, uint64_t time, continuity_state_e state);
+void packet_conn_init(conn_status_p *p, uint64_t time, conn_status_e status);
 
 const char *warning_str(warn_type_e warning);
 const char *arm_state_str(arm_lvl_e state);
