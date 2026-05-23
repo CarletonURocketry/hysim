@@ -134,7 +134,13 @@ static int usb_init(void) {
 
 #if defined(CONFIG_NETUTILS_NTPCLIENT)
 /* Starts the NTP server automatically*/
-static int ntp_init(void) { return ntpc_start(); }
+static int ntp_init(void) {
+    int ret = ntpc_start();
+    if (ret < 0) {
+        return ret;
+    }
+    return 0;
+}
 #endif
 
 /*
@@ -173,17 +179,17 @@ int main(int argc, char **argv) {
     hinfo("USB shell started\n");
 #endif
 
+#if defined(CONFIG_NSH_NETINIT) && !defined(CONFIG_SYSTEM_NSH)
+    netinit_bringup();
+    sleep(1);
+    hinfo("Network infrastructure intitialized\n");
+#endif
+
 #if !defined(DESKTOP_BUILD) && defined(CONFIG_NETUTILS_NTPCLIENT)
     if (ntp_init()) {
         return EXIT_FAILURE;
     }
     hinfo("NTP client started\n");
-#endif
-
-#if defined(CONFIG_NSH_NETINIT) && !defined(CONFIG_SYSTEM_NSH)
-    netinit_bringup();
-    sleep(1);
-    hinfo("Network infrastructure intitialized\n");
 #endif
 
     /* Parse command line options. */
